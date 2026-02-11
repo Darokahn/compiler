@@ -22,10 +22,17 @@ void scanAndPrintDebug(char* filename) {
     scanner_init(&s, filename);
     token_t t;
     t.type = 0;
+    printf("%d", s.lineCount);
     while (t.type != END) {
         t = scanner_getNextToken(&s);
         if (t.type == BAD) break;
-        if (t.type == WHITESPACE || t.type == NEWLINE) token_prettyPrint(&t);
+        if (t.type == WHITESPACE) {
+	   token_prettyPrint(&t);
+	}
+	else if (t.type == NEWLINE) {
+	    token_prettyPrint(&t);
+	    printf("%d", s.lineCount);
+	}
         else token_debugPrettyPrint(&t);
     }
 }
