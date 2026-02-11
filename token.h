@@ -48,6 +48,7 @@ enum tokenType {
     EQ,
     AMP,
     DOT,
+    SUB,
     COMMA,
     BOR,
     LOR,
@@ -107,6 +108,7 @@ extern const char *tokenTypeStrings[SENTINEL] = {
     "EQ",
     "AMP",
     "DOT",
+    "SUB",
     "COMMA",
     "BOR",
     "LOR",
@@ -165,6 +167,7 @@ extern const char* tokenTypeColors[SENTINEL] = {
     "\033[38;2;212;212;212m",  // EQ - light gray (operator)
     "\033[38;2;212;212;212m",  // AMP - light gray (operator)
     "\033[38;2;212;212;212m",  // DOT - light gray
+    "\033[38;2;212;212;212m",  // SUB - light gray
     "\033[38;2;212;212;212m",  // COMMA - light gray
     "\033[38;2;212;212;212m",  // BOR - light gray
     "\033[38;2;212;212;212m",  // LOR - light gray

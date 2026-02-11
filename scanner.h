@@ -10,7 +10,7 @@
 #include "token.h"
 #include "stateMachine.h"
 
-char* emptyString = "";
+extern char* emptyString = "";
 
 typedef struct {
     char* fileBase;

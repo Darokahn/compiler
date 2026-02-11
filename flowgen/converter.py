@@ -78,12 +78,19 @@ static enum charType getCharType(int c) {
     if (c == '\\n') return NEWLINECHAR;
     if (isspace(c)) return WHITESPACECHAR;
     if (c == '+') return PLUSCHAR;
+    if (c == '-') return MINUSCHAR;
+    if (c == '%%') return MODCHAR;
+    if (c == '^') return CARETCHAR;
+    if (c == '~') return TILDECHAR;
     if (c == '#') return HASHCHAR;
     if (c == '*') return STARCHAR;
     if (c == '&') return AMPCHAR;
     if (c == '/') return SLASHCHAR;
     if (c == '*') return STARCHAR;
     if (c == '!') return EXCCHAR;
+    if (c == '?') return QUESTIONCHAR;
+    if (c == '[') return LBRACKETCHAR;
+    if (c == ']') return RBRACKETCHAR;
     if (c == '(') return LPARENCHAR;
     if (c == ')') return RPARENCHAR;
     if (c == '{') return LCURLYCHAR;
@@ -92,6 +99,7 @@ static enum charType getCharType(int c) {
     if (c == ',') return COMMACHAR;
     if (c == '|') return PIPECHAR;
     if (c == ';') return SEMICOLONCHAR;
+    if (c == ':') return COLONCHAR;
     if (c == '=') return EQCHAR;
     if (c == '"') return QUOTECHAR;
     if (c == '\\\\') return BSLASHCHAR;

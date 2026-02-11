@@ -11,6 +11,7 @@ enum state {
     MODEQSTATE,
     MINUSSTATE,
     MINUSEQSTATE,
+    SUBSTATE,
     CARETSTATE,
     XOREQSTATE,
     TILDESTATE,
@@ -110,12 +111,19 @@ static enum charType getCharType(int c) {
     if (c == '\n') return NEWLINECHAR;
     if (isspace(c)) return WHITESPACECHAR;
     if (c == '+') return PLUSCHAR;
+    if (c == '-') return MINUSCHAR;
+    if (c == '%') return MODCHAR;
+    if (c == '^') return CARETCHAR;
+    if (c == '~') return TILDECHAR;
     if (c == '#') return HASHCHAR;
     if (c == '*') return STARCHAR;
     if (c == '&') return AMPCHAR;
     if (c == '/') return SLASHCHAR;
     if (c == '*') return STARCHAR;
     if (c == '!') return EXCCHAR;
+    if (c == '?') return QUESTIONCHAR;
+    if (c == '[') return LBRACKETCHAR;
+    if (c == ']') return RBRACKETCHAR;
     if (c == '(') return LPARENCHAR;
     if (c == ')') return RPARENCHAR;
     if (c == '{') return LCURLYCHAR;
@@ -124,6 +132,7 @@ static enum charType getCharType(int c) {
     if (c == ',') return COMMACHAR;
     if (c == '|') return PIPECHAR;
     if (c == ';') return SEMICOLONCHAR;
+    if (c == ':') return COLONCHAR;
     if (c == '=') return EQCHAR;
     if (c == '"') return QUOTECHAR;
     if (c == '\\') return BSLASHCHAR;
@@ -185,6 +194,7 @@ static void stateMachine_init(stateMachine_t* t) {
     t->transitions[FRACTIONSTATE][DIGITCHAR] = FRACTIONSTATE;
     t->transitions[MODSTATE][EQCHAR] = MODEQSTATE;
     t->transitions[MINUSSTATE][EQCHAR] = MINUSEQSTATE;
+    t->transitions[MINUSSTATE][RANGLECHAR] = SUBSTATE;
     t->transitions[CARETSTATE][EQCHAR] = XOREQSTATE;
     t->transitions[TILDESTATE][EQCHAR] = BNOTEQSTATE;
     t->transitions[PIPESTATE][EQCHAR] = BOREQSTATE;
@@ -404,6 +414,7 @@ static void stateMachine_init(stateMachine_t* t) {
     t->correspondingTokens[MODEQSTATE] = MODEQ;
     t->correspondingTokens[MINUSSTATE] = MINUS;
     t->correspondingTokens[MINUSEQSTATE] = MINUSEQ;
+    t->correspondingTokens[SUBSTATE] = SUB;
     t->correspondingTokens[CARETSTATE] = XOR;
     t->correspondingTokens[XOREQSTATE] = XOREQ;
     t->correspondingTokens[TILDESTATE] = BNOT;

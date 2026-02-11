@@ -22,7 +22,7 @@ void scanAndPrintDebug(char* filename) {
     scanner_init(&s, filename);
     token_t t;
     t.type = 0;
-    printf("%d", s.lineCount);
+    printf("%-3d", s.lineCount);
     while (t.type != END) {
         t = scanner_getNextToken(&s);
         if (t.type == BAD) break;
@@ -31,7 +31,7 @@ void scanAndPrintDebug(char* filename) {
 	}
 	else if (t.type == NEWLINE) {
 	    token_prettyPrint(&t);
-	    printf("%d", s.lineCount);
+	    printf("%-3d", s.lineCount);
 	}
         else token_debugPrettyPrint(&t);
     }
@@ -47,8 +47,10 @@ int main() {
      * comment
      */
     /* Here's a block comment that ends strangely***/
+    /**/
     char c;
     scanAndPrint("main.c");
     read(0, &c, 1);
     scanAndPrintDebug("main.c");
+    printf("\n");
 } // Here's an EOF line comment
