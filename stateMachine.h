@@ -104,7 +104,7 @@ typedef struct {
     enum tokenType correspondingTokens[LASTSTATE];
 } stateMachine_t;
 
-static enum charType getCharType(char c) {
+static enum charType getCharType(int c) {
     if (isalpha(c) || c == '_') return LETTERCHAR;
     if (isdigit(c)) return DIGITCHAR;
     if (c == '\n') return NEWLINECHAR;
@@ -133,7 +133,7 @@ static enum charType getCharType(char c) {
     return BADCHAR;
 }
 
-static int stateMachine_update(stateMachine_t* t, char c, enum tokenType* currentTok) {
+static int stateMachine_update(stateMachine_t* t, int c, enum tokenType* currentTok) {
     enum charType charType = getCharType(c);
     enum state newState = t->transitions[t->state][charType];
     *currentTok = t->correspondingTokens[t->state];
