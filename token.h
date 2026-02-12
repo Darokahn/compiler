@@ -9,6 +9,7 @@
 
 
 enum tokenType {
+    KEYWORD,
     VOID,
     MAIN,
     WHITESPACE,
@@ -48,7 +49,7 @@ enum tokenType {
     EQ,
     AMP,
     DOT,
-    SUB,
+    ARROW,
     COMMA,
     BOR,
     LOR,
@@ -69,6 +70,7 @@ enum tokenType {
 };
 
 extern const char *tokenTypeStrings[SENTINEL] = {
+    "KEYWORD",
     "VOID",
     "MAIN",
     "WHITESPACE",
@@ -108,7 +110,7 @@ extern const char *tokenTypeStrings[SENTINEL] = {
     "EQ",
     "AMP",
     "DOT",
-    "SUB",
+    "ARROW",
     "COMMA",
     "BOR",
     "LOR",
@@ -128,6 +130,7 @@ extern const char *tokenTypeStrings[SENTINEL] = {
 };
 
 extern const char* tokenTypeColors[SENTINEL] = {
+    "\033[38;2;86;156;214m",   // KEYWORD - blue (keyword)
     "\033[38;2;86;156;214m",   // VOID - blue (keyword)
     "\033[38;2;86;156;214m",   // MAIN - blue (keyword)
     "\033[38;2;212;212;212m",  // WHITESPACE - light gray
@@ -167,7 +170,7 @@ extern const char* tokenTypeColors[SENTINEL] = {
     "\033[38;2;212;212;212m",  // EQ - light gray (operator)
     "\033[38;2;212;212;212m",  // AMP - light gray (operator)
     "\033[38;2;212;212;212m",  // DOT - light gray
-    "\033[38;2;212;212;212m",  // SUB - light gray
+    "\033[38;2;212;212;212m",  // ARROW - light gray
     "\033[38;2;212;212;212m",  // COMMA - light gray
     "\033[38;2;212;212;212m",  // BOR - light gray
     "\033[38;2;212;212;212m",  // LOR - light gray
@@ -196,12 +199,46 @@ typedef struct token token_t;
 
 table_t reservedWords = {0};
 
+char* generalKeywords[] = {
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "int",
+    "long",
+    "register",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while"
+};
+
 void initReserved() {
     table_init(&reservedWords, NAMESPACESIZE);
-    *table_insert(&reservedWords, "void", 4) = VOID;
-    *table_insert(&reservedWords, "main", 4) = MAIN;
-    *table_insert(&reservedWords, "cout", 4) = COUT;
-    *table_insert(&reservedWords, "int", 3) = INT;
+    for (int i = 0; i < sizeof generalKeywords / sizeof *generalKeywords; i++) {
+        *table_insert(&reservedWords, generalKeywords[i], strlen(generalKeywords[i])) = KEYWORD;
+    }
 }
 
 static int token_sdebug(token_t* t, char* output, int length) {
@@ -229,7 +266,7 @@ static int token_prettyPrint(token_t* t) {
 static void token_init(token_t* t, char* lexeme, int lexemeLen, int type) {
     if (reservedWords.entries == NULL) initReserved();
     int* tokEntry = table_lookup(&reservedWords, lexeme, lexemeLen);
-    if (tokEntry != TABLE_NULL) type = *tokEntry;
+    if (tokEntry != TABLE_NULL) type = KEYWORD;
     t->lexeme = lexeme;
     t->lexemeLen = lexemeLen;
     t->type = type;

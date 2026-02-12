@@ -11,7 +11,7 @@ enum state {
     MODEQSTATE,
     MINUSSTATE,
     MINUSEQSTATE,
-    SUBSTATE,
+    ARROWSTATE,
     CARETSTATE,
     XOREQSTATE,
     TILDESTATE,
@@ -189,12 +189,13 @@ static void stateMachine_init(stateMachine_t* t) {
     t->transitions[STARTSTATE][QUOTECHAR] = QUOTESTATE;
     t->transitions[STARTSTATE][PIPECHAR] = PIPESTATE;
     t->transitions[IDENTIFIERSTATE][LETTERCHAR] = IDENTIFIERSTATE;
+    t->transitions[IDENTIFIERSTATE][DIGITCHAR] = IDENTIFIERSTATE;
     t->transitions[INTEGERSTATE][DIGITCHAR] = INTEGERSTATE;
     t->transitions[INTEGERSTATE][DOTCHAR] = FRACTIONSTATE;
     t->transitions[FRACTIONSTATE][DIGITCHAR] = FRACTIONSTATE;
     t->transitions[MODSTATE][EQCHAR] = MODEQSTATE;
     t->transitions[MINUSSTATE][EQCHAR] = MINUSEQSTATE;
-    t->transitions[MINUSSTATE][RANGLECHAR] = SUBSTATE;
+    t->transitions[MINUSSTATE][RANGLECHAR] = ARROWSTATE;
     t->transitions[CARETSTATE][EQCHAR] = XOREQSTATE;
     t->transitions[TILDESTATE][EQCHAR] = BNOTEQSTATE;
     t->transitions[PIPESTATE][EQCHAR] = BOREQSTATE;
@@ -204,6 +205,7 @@ static void stateMachine_init(stateMachine_t* t) {
     t->transitions[LANGLESTATE][EQCHAR] = LEQSTATE;
     t->transitions[LANGLESTATE][LANGLECHAR] = SHIFTLEFTSTATE;
     t->transitions[RANGLESTATE][EQCHAR] = GEQSTATE;
+    t->transitions[RANGLESTATE][LANGLECHAR] = SHIFTRIGHTSTATE;
     t->transitions[QUOTESTATE][LETTERCHAR] = QUOTESTATE;
     t->transitions[QUOTESTATE][DIGITCHAR] = QUOTESTATE;
     t->transitions[QUOTESTATE][NEWLINECHAR] = QUOTESTATE;
@@ -414,7 +416,7 @@ static void stateMachine_init(stateMachine_t* t) {
     t->correspondingTokens[MODEQSTATE] = MODEQ;
     t->correspondingTokens[MINUSSTATE] = MINUS;
     t->correspondingTokens[MINUSEQSTATE] = MINUSEQ;
-    t->correspondingTokens[SUBSTATE] = SUB;
+    t->correspondingTokens[ARROWSTATE] = ARROW;
     t->correspondingTokens[CARETSTATE] = XOR;
     t->correspondingTokens[XOREQSTATE] = XOREQ;
     t->correspondingTokens[TILDESTATE] = BNOT;
