@@ -27,12 +27,12 @@ void scanAndPrintDebug(char* filename) {
         t = scanner_getNextToken(&s);
         if (t.type == BAD) break;
         if (t.type == WHITESPACE) {
-	   token_prettyPrint(&t);
-	}
-	else if (t.type == NEWLINE) {
-	    token_prettyPrint(&t);
-	    printf("%-3d", s.lineCount);
-	}
+            token_prettyPrint(&t);
+        }
+        else if (t.type == NEWLINE) {
+            token_prettyPrint(&t);
+            printf("%-3d", s.lineCount);
+        }
         else token_debugPrettyPrint(&t);
     }
 }
@@ -48,9 +48,9 @@ int main() {
      */
     /* Here's a block comment that ends strangely***/
     /**/
-    char c;
+    char c_1;
     scanAndPrint("main.c");
-    read(0, &c, 1);
+    read(0, &c_1, 1);
     scanAndPrintDebug("main.c");
     printf("\n");
 } // Here's an EOF line comment
