@@ -1,0 +1,141 @@
+# Use `default` to provide a definition for each unspecified edge. Omit it for `default` to be `cantmove`.
+# Use `token` to specify what token type should be emitted if this state transitions to `cantmove`. Omit for a token named the same as the state.
+
+start:
+  defaultedge: cantmove
+  token: bad
+
+  letter: identifier
+  '0': nondecimal
+  nonzerodecimal: decimal
+  whitespace: whitespace
+  newline: newline
+  '%': mod
+  '-': minus
+  '+': plus
+  '^': caret
+  '~': tilde
+  '(': lparen
+  ')': rparen
+  '{': lcurly
+  '}': rcurly
+  ']': rbracket
+  '[': lbracket
+  '?': question
+  ';': semicolon
+  ':': colon
+  '=': assignment
+  '<': langle
+  '>': rangle
+  '/': div
+  '*': star
+  '#': preproc
+  '&': amp
+  ',': comma
+  '.': dot
+  '!': exc
+  '"': quote
+  '|': pipe
+  "'": charliteralstart
+  eof: eof
+
+identifier:
+  letter: identifier
+  decimal: identifier
+
+mod:
+  '=': modeq
+
+minus:
+  '=': minuseq
+  '>': arrow
+
+caret:
+  '=': xoreq
+
+tilde:
+  '=': bnoteq
+
+pipe:
+  '=': boreq
+  '|': lor
+
+assignment:
+  '=': eq
+
+plus:
+  '=': pluseq
+
+langle:
+  '<': shiftleft
+  '=': le
+
+rangle:
+  '>': shiftright
+  '=': ge
+
+quote:
+  defaultedge: quote
+  token: bad
+
+  eof: cantmove
+  backslash: quotesuspend
+  newline: cantmove
+  '"': quotefinish
+
+quotesuspend:
+  defaultedge: quote
+  token: bad
+
+  eof: cantmove
+  newline: cantmove
+
+quotefinish:
+  token: string
+
+div:
+  '/': linecomment
+  '*': blockcomment
+
+linecomment:
+  defaultedge: linecomment
+
+  newline: cantmove
+  eof: cantmove
+
+blockcomment:
+  defaultedge: blockcomment
+  token: bad
+
+  eof: cantmove
+  '*': blockcommentweak
+
+blockcommentweak:
+  defaultedge: blockcomment
+  token: bad
+
+  eof: cantmove
+  '*': blockcommentweak
+  '/': blockcommentfinish
+
+blockcommentfinish:
+  token: blockcomment
+
+amp:
+  '=': bandeq
+  '&': and
+
+star:
+  '=': timeseq
+
+exc:
+  '=': noteq
+
+preproc:
+  defaultedge: preproc
+  newline: cantmove
+  eof: cantmove
+
+whitespace:
+  whitespace: whitespace
+  newline: newline

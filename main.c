@@ -10,9 +10,9 @@ void scanAndPrint(char* filename) {
     scanner_init(&s, filename);
     token_t t;
     t.type = 0;
-    while (t.type != END) {
+    while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
-        if (t.type == BAD) break;
+        if (t.type == bad_token) break;
         token_prettyPrint(&t);
     }
 }
@@ -23,13 +23,13 @@ void scanAndPrintDebug(char* filename) {
     token_t t;
     t.type = 0;
     printf("%-3d", s.lineCount);
-    while (t.type != END) {
+    while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
-        if (t.type == BAD) break;
-        if (t.type == WHITESPACE) {
+        if (t.type == bad_token) break;
+        if (t.type == whitespace_token) {
             token_prettyPrint(&t);
         }
-        else if (t.type == NEWLINE) {
+        else if (t.type == newline_token) {
             token_prettyPrint(&t);
             printf("%-3d", s.lineCount);
         }
@@ -51,6 +51,6 @@ int main() {
     char c_1;
     scanAndPrint("main.c");
     read(0, &c_1, 1);
-    scanAndPrintDebug("main.c");
+    scanAndPrintDebug("test.c");
     printf("\n");
 } // Here's an EOF line comment

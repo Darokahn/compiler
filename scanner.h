@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 #include <stdlib.h>
 #include "token.h"
+#include "stateMachineDefs.h"
 #include "stateMachine.h"
 
 extern char* emptyString = "";
@@ -69,13 +70,13 @@ static token_t scanner_getNextToken(scanner_t* s) {
         c = scanner_getc(s);
         lexemeLen++;
         currentState = stateMachine_update(&stateMachine, c, &lastTokenType);
-        if (currentState == STARTSTATE || currentState == EOFSTATE) {
+        if (currentState == start_state || currentState == eof_state) {
             lexemeBase = s->fileReader;
             lexemeLen = 0;
         }
-        if (c == '\n' && currentState != CANTMOVESTATE) s->lineCount++;
-    } while (currentState != CANTMOVESTATE);
-    if (lastTokenType == BAD) {
+        if (c == '\n' && currentState != cantmove_state) s->lineCount++;
+    } while (currentState != cantmove_state);
+    if (lastTokenType == bad_token) {
         fprintf(stderr, "bad token from lexeme \"%.*s\"\n", lexemeLen, lexemeBase);
         exit(1);
     }

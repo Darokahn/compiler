@@ -1,0 +1,186 @@
+nondecimal:
+  token: octal
+
+  'x': hexadecimal
+  'X': hexadecimal
+  octal: octal
+
+octal:
+  octal: octal
+  "'": octal
+  '.': fraction
+  u: oct_u
+  U: oct_u
+  l: oct_l
+  L: oct_L
+  w: oct_w
+  W: oct_W
+
+oct_u:
+  l: oct_ul
+  L: oct_uL
+  w: oct_uw
+  W: oct_uW
+
+oct_l:
+  l: oct_ll
+  u: oct_lu
+  U: oct_lu
+
+oct_L:
+  L: oct_ll
+  u: oct_lu
+  U: oct_lu
+  token: oct_l
+
+oct_w:
+  b: oct_wb
+  token: bad
+
+oct_W:
+  B: oct_wb
+  token: bad
+
+oct_ul:
+  l: oct_ull
+  token: oct_lu
+
+oct_uL:
+  L: oct_ull
+  token: oct_lu
+
+oct_uw:
+  b: oct_uwb
+  token: bad
+
+oct_uW:
+  B: oct_uwb
+  token: bad
+
+oct_ll:
+  u: oct_ull
+  U: oct_ull
+
+oct_wb:
+  u: oct_uwb
+  U: oct_uwb
+
+hexadecimal:
+  hexadecimal: hexadecimal
+  "'": hexadecimal
+  '.': hexfraction
+  u: hex_u
+  U: hex_u
+  l: hex_l
+  L: hex_L
+  w: hex_w
+  W: hex_W
+
+hex_u:
+  l: hex_ul
+  L: hex_uL
+  w: hex_uw
+  W: hex_uW
+
+hex_l:
+  l: hex_ll
+  u: hex_lu
+  U: hex_lu
+
+hex_L:
+  L: hex_ll
+  u: hex_lu
+  U: hex_lu
+  token: hex_l
+
+hex_w:
+  b: hex_wb
+  token: bad
+
+hex_W:
+  B: hex_wb
+  token: bad
+
+hex_ul:
+  l: hex_ull
+  token: hex_lu
+
+hex_uL:
+  L: hex_ull
+  token: hex_lu
+
+hex_uw:
+  b: hex_uwb
+  token: bad
+
+hex_uW:
+  B: hex_uwb
+  token: bad
+
+hex_ll:
+  u: hex_ull
+  U: hex_ull
+
+hex_wb:
+  u: hex_uwb
+  U: hex_uwb
+
+decimal:
+  decimal: decimal
+  "'": decimal
+  '.': decimalfraction
+  u: decimal_u
+  U: decimal_u
+  l: decimal_l
+  L: decimal_L
+  w: decimal_w
+  W: decimal_W
+
+decimal_u:
+  l: decimal_ul
+  L: decimal_uL
+  w: decimal_uw
+  W: decimal_uW
+
+decimal_l:
+  l: decimal_ll
+  u: decimal_lu
+  U: decimal_lu
+
+decimal_L:
+  L: decimal_ll
+  u: decimal_lu
+  U: decimal_lu
+  token: decimal_l
+
+decimal_w:
+  b: decimal_wb
+  token: bad
+
+decimal_W:
+  B: decimal_wb
+  token: bad
+
+decimal_ul:
+  l: decimal_ull
+  token: decimal_lu
+
+decimal_uL:
+  L: decimal_ull
+  token: decimal_lu
+
+decimal_uw:
+  b: decimal_uwb
+  token: bad
+
+decimal_uW:
+  B: decimal_uwb
+  token: bad
+
+decimal_ll:
+  u: decimal_ull
+  U: decimal_ull
+
+decimal_wb:
+  u: decimal_uwb
+  U: decimal_uwb

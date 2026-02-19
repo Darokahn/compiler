@@ -1,0 +1,13 @@
+definitions:
+  letter: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_
+  decimal: "0123456789"
+  octal: "01234567"
+  hexadecimal: 0123456789abcdefABCDEF
+  binary: "01"
+  nonzerodecimal: "123456789"
+  nonzerooctal: "1234567"
+  nonzerohex: 123456789abcdefABCDEF
+  whitespace: " \t\r"
+  newline: "\n"
+  backslash: "\\\\"
+

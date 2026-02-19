@@ -1,135 +1,88 @@
-import csv
-import sys
+import os
+import parseStatemachine
 
-def getDict():
-    columns = {}
-    columnHeaders = []
-    rowHeaders = []
-    correspondingTokens = {}
-    with open(sys.argv[1], "r") as csvfile:
-        firstRow = True
-        columnIndex = {}
-        reader = csv.reader(csvfile)
-        columns = dict.fromkeys(next(reader))
-        for i, name in enumerate(columns):
-            columnHeader = ""
-            columnIndex[i] = name
-            if i != 0:
-                columnHeaders.append(name)
-                columnHeader = name
-            columns[name] = {}
-        for i, row in enumerate(reader):
-            rowHeader = row[0]
-            if rowHeader == '':
+files = map(lambda x: "stateMachine/" + x, os.listdir("stateMachine"))
+    
+data = parseStatemachine.collectStateTree(files)
+
+definitions, processedStates, tokens, alphabet = parseStatemachine.normalizeStateTree(data)
+
+alphabetEnumeration = dict(zip(alphabet, range(1, len(alphabet) + 1)))
+
+
+correspondingTokens = list(map(lambda x: f"[{x}_state] = {processedStates[x]['token']}_token", list(processedStates.keys())))
+
+transitions = []
+
+for statename in processedStates:
+    state = processedStates[statename]
+    remainingChars = alphabet.copy() # alphabet is shallow, this is ok
+    for edgeName in state["edges"]:
+        edgeChars = set(edgeName)
+        if (edgeName == "eof"):
+            edgeChars = set([parseStatemachine.EOF])
+        if (len(edgeChars) > 1):
+            edgeChars = set(definitions[edgeName])
+        edgeDest = state["edges"][edgeName]
+        for char in edgeChars:
+            if edgeDest == 'cantmove':
                 continue
-            if rowHeader == "CORRESPONDINGTOKEN":
-                correspondingTokens = dict(zip([None] + columnHeaders, row))
-                continue
-            rowHeaders.append(rowHeader)
-            for j, cell in enumerate(row):
-                if j == 0:
-                    continue
-                columns[columnIndex[j]][rowHeader] = cell
-    return columns, rowHeaders, columnHeaders, correspondingTokens
+            transitions.append(f"[{statename}_state][{alphabetEnumeration[char]}] = {edgeDest}_state")
+        remainingChars -= edgeChars
 
+    if state['defaultedge'] != 'cantmove':
+        for char in remainingChars:
+            transitions.append(f"[{statename}_state][{alphabetEnumeration[char]}] = {state['defaultedge']}_state")
 
-
-dicti, rowHeaders, columnHeaders, correspondingTokens = getDict()
-correspondingTokens.pop(None)
-
-rowHeaders.append("LASTCHAR")
-columnHeaders.append("LASTSTATE")
-
-stateMachineLines = []
-
-for row in dicti:
-    for col in dicti[row]:
-        if dicti[row][col] == '': 
-            continue
-        stateMachineLines.append(f"t->transitions[{row}][{col}] = {dicti[row][col]};")
-
-correspondingTokenLines = []
-
-for key in correspondingTokens:
-    if (correspondingTokens[key] == ''):
-        continue
-    correspondingTokenLines.append(f"t->correspondingTokens[{key}] = {correspondingTokens[key]};")
-
-hfile = """
+file = """
 #pragma once
-#include <ctype.h>
+enum tokenType {
+    %s
+};
+
+extern const char* tokenTypeStrings[TOKENCOUNT] = {
+    %s
+};
+
+extern const char* tokenTypeColors[TOKENCOUNT] = {
+    %s
+};
+
+#define MAXCHAR %d
+
 enum state {
     %s
 };
 
-enum charType {
+extern enum state stateMachine_transitions[STATECOUNT][MAXCHAR + 1] = {
     %s
 };
 
-typedef struct {
-    enum state state;
-    enum state transitions[LASTSTATE][LASTCHAR];
-    enum tokenType correspondingTokens[LASTSTATE];
-} stateMachine_t;
-
-static enum charType getCharType(int c) {
-    if (isalpha(c) || c == '_') return LETTERCHAR;
-    if (isdigit(c)) return DIGITCHAR;
-    if (c == '\\n') return NEWLINECHAR;
-    if (isspace(c)) return WHITESPACECHAR;
-    if (c == '+') return PLUSCHAR;
-    if (c == '-') return MINUSCHAR;
-    if (c == '%%') return MODCHAR;
-    if (c == '^') return CARETCHAR;
-    if (c == '~') return TILDECHAR;
-    if (c == '#') return HASHCHAR;
-    if (c == '*') return STARCHAR;
-    if (c == '&') return AMPCHAR;
-    if (c == '/') return SLASHCHAR;
-    if (c == '*') return STARCHAR;
-    if (c == '!') return EXCCHAR;
-    if (c == '?') return QUESTIONCHAR;
-    if (c == '[') return LBRACKETCHAR;
-    if (c == ']') return RBRACKETCHAR;
-    if (c == '(') return LPARENCHAR;
-    if (c == ')') return RPARENCHAR;
-    if (c == '{') return LCURLYCHAR;
-    if (c == '}') return RCURLYCHAR;
-    if (c == '.') return DOTCHAR;
-    if (c == ',') return COMMACHAR;
-    if (c == '|') return PIPECHAR;
-    if (c == ';') return SEMICOLONCHAR;
-    if (c == ':') return COLONCHAR;
-    if (c == '=') return EQCHAR;
-    if (c == '"') return QUOTECHAR;
-    if (c == '\\\\') return BSLASHCHAR;
-    if (c == '<') return LANGLECHAR;
-    if (c == '>') return RANGLECHAR;
-    if (c == EOF) return EOFCHAR;
-    return BADCHAR;
-}
-
-static int stateMachine_update(stateMachine_t* t, int c, enum tokenType* currentTok) {
-    enum charType charType = getCharType(c);
-    enum state newState = t->transitions[t->state][charType];
-    *currentTok = t->correspondingTokens[t->state];
-    t->state = newState;
-    return t->state;
-}
-
-static void stateMachine_init(stateMachine_t* t) {
-    t->state = STARTSTATE;
-    for (int i = 0; i < LASTSTATE; i++) {
-        for (int j = 0; j < LASTCHAR; j++) {
-            t->transitions[i][j] = CANTMOVESTATE;
-        }
-    }
+extern enum tokenType stateMachine_correspondingTokens[STATECOUNT] = {
     %s
-    for (int i = 0; i < LASTSTATE; i++) {
-        t->correspondingTokens[i] = BAD;
-    }
+};
+
+extern unsigned char asciiEnumeration[] = {
     %s
-}
+};
 """
-hfile %= (",\n    ".join(columnHeaders), ",\n    ".join(rowHeaders), "\n    ".join(stateMachineLines), "\n    ".join(correspondingTokenLines))
-print(hfile)
+
+processedStates.pop("cantmove", None)
+
+def salvageCharRepr(char):
+    if char is parseStatemachine.EOF:
+        return '255'
+    if char == "'":
+        return "\'\\'\'"
+    return repr(char)
+
+print(file % (
+    ",\n    ".join(map(lambda x: x + "_token", tokens)) + ",\n    TOKENCOUNT",
+    ",\n    ".join(map(lambda x: f"\"{x}\"", tokens)),
+    ",\n    ".join(map(lambda x: "\"\\033[38;2;86;156;214m\"", tokens)),
+    len(alphabet),
+    "cantmove_state,\n    " + ",\n    ".join(map(lambda x: x + "_state", processedStates.keys())) + ",\n    STATECOUNT",
+    ",\n    ".join(transitions),
+    ",\n    ".join(correspondingTokens),
+    ",\n    ".join(map(lambda x: f"[{salvageCharRepr(x)}]={alphabetEnumeration[x]}", alphabetEnumeration))
+    ))
