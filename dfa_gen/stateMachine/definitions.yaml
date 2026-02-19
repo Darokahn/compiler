@@ -10,4 +10,8 @@ definitions:
   whitespace: " \t\r"
   newline: "\n"
   backslash: "\\\\"
+  dot: "."
+  singlequote: "'"
+  comma: ","
+  slash: "/"
 

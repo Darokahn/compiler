@@ -7,8 +7,8 @@ nondecimal:
 
 octal:
   octal: octal
-  "'": octal
-  '.': fraction
+  singlequote: octal
+  dot: fraction
   u: oct_u
   U: oct_u
   l: oct_l
@@ -67,8 +67,8 @@ oct_wb:
 
 hexadecimal:
   hexadecimal: hexadecimal
-  "'": hexadecimal
-  '.': hexfraction
+  singlequote: hexadecimal
+  dot: hexfraction
   u: hex_u
   U: hex_u
   l: hex_l
@@ -127,8 +127,8 @@ hex_wb:
 
 decimal:
   decimal: decimal
-  "'": decimal
-  '.': decimalfraction
+  singlequote: decimal
+  dot: decimalfraction
   u: decimal_u
   U: decimal_u
   l: decimal_l

@@ -7,7 +7,7 @@ charliteralstart:
   backslash: charliteralescape
   eof: cantmove
   newline: cantmove
-  "'": cantmove
+  singlequote: cantmove
 
 charliteralchewedone:
   token: bad
@@ -16,12 +16,12 @@ charliteralchewedone:
   backslash: charliteralescape
   eof: cantmove
   newline: cantmove
-  "'": charliteral
+  singlequote: charliteral
 
 charliteralescape:
   token: bad
 
-  "'": charliteralchewedone
+  singlequote: charliteralchewedone
   '"': charliteralchewedone
   '?': charliteralchewedone
   backslash: charliteralchewedone
@@ -39,13 +39,13 @@ charescapeoctal0:
   token: bad
 
   octal: charescapeoctal1
-  "'": charliteral
+  singlequote: charliteral
 
 charescapeoctal1:
   token: bad
 
   octal: charliteralchewedone
-  "'": charliteral
+  singlequote: charliteral
 
 charescapehexempty:
   token: bad
@@ -56,5 +56,5 @@ charescapehex:
   token: bad
 
   hexadecimal: charescapehex
-  "'": charliteral
+  singlequote: charliteral
 

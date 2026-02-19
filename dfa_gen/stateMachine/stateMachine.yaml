@@ -27,16 +27,16 @@ start:
   '=': assignment
   '<': langle
   '>': rangle
-  '/': div
+  slash: div
   '*': star
   '#': preproc
   '&': amp
-  ',': comma
-  '.': dot
+  comma: comma
+  dot: dot
   '!': exc
   '"': stringliteralstart
   '|': pipe
-  "'": charliteralstart
+  singlequote: charliteralstart
   eof: eof
 
 identifier:
@@ -75,7 +75,7 @@ rangle:
   '=': ge
 
 div:
-  '/': linecomment
+  slash: linecomment
   '*': blockcomment
 
 linecomment:
@@ -97,7 +97,7 @@ blockcommentweak:
 
   eof: cantmove
   '*': blockcommentweak
-  '/': blockcommentfinish
+  slash: blockcommentfinish
 
 blockcommentfinish:
   token: blockcomment
