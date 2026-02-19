@@ -1,14 +1,21 @@
 import os
+import sys
 import yaml
 from graphviz import Digraph
 import parseStatemachine
 
-files = map(lambda x: "stateMachine/" + x, os.listdir("stateMachine"))
-    
+arg = "./stateMachine"
+
+if (len(sys.argv) >= 2):
+    arg = sys.argv[1]
+
+files = os.listdir(arg)
+
+files = map(lambda x: os.path.join(arg, x), os.listdir(arg))
+
 data = parseStatemachine.collectStateTree(files)
 
 definitions, processedStates, tokens, alphabet = parseStatemachine.normalizeStateTree(data)
-
 dot = Digraph(comment="State Machine")
 dot.attr(rankdir="LR")
 

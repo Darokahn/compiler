@@ -34,7 +34,7 @@ start:
   ',': comma
   '.': dot
   '!': exc
-  '"': quote
+  '"': stringliteralstart
   '|': pipe
   "'": charliteralstart
   eof: eof
@@ -73,25 +73,6 @@ langle:
 rangle:
   '>': shiftright
   '=': ge
-
-quote:
-  defaultedge: quote
-  token: bad
-
-  eof: cantmove
-  backslash: quotesuspend
-  newline: cantmove
-  '"': quotefinish
-
-quotesuspend:
-  defaultedge: quote
-  token: bad
-
-  eof: cantmove
-  newline: cantmove
-
-quotefinish:
-  token: string
 
 div:
   '/': linecomment

@@ -2,32 +2,36 @@
 
 charliteralstart:
   token: bad
-  defaultedge: charliteralfull
+  defaultedge: charliteralchewedone
 
   backslash: charliteralescape
   eof: cantmove
   newline: cantmove
   "'": cantmove
 
-charliteralfull:
+charliteralchewedone:
   token: bad
+  defaultedge: charliteralchewedone
 
+  backslash: charliteralescape
+  eof: cantmove
+  newline: cantmove
   "'": charliteral
 
 charliteralescape:
   token: bad
 
-  "'": charliteralfull
-  '"': charliteralfull
-  '?': charliteralfull
-  backslash: charliteralfull
-  a: charliteralfull
-  b: charliteralfull
-  f: charliteralfull
-  n: charliteralfull
-  r: charliteralfull
-  t: charliteralfull
-  v: charliteralfull
+  "'": charliteralchewedone
+  '"': charliteralchewedone
+  '?': charliteralchewedone
+  backslash: charliteralchewedone
+  a: charliteralchewedone
+  b: charliteralchewedone
+  f: charliteralchewedone
+  n: charliteralchewedone
+  r: charliteralchewedone
+  t: charliteralchewedone
+  v: charliteralchewedone
   octal: charescapeoctal0
   x: charescapehexempty
 
@@ -40,7 +44,7 @@ charescapeoctal0:
 charescapeoctal1:
   token: bad
 
-  octal: charliteralfull
+  octal: charliteralchewedone
   "'": charliteral
 
 charescapehexempty:

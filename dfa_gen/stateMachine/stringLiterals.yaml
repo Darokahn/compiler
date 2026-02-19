@@ -1,0 +1,58 @@
+# C spec string literal parsing
+
+stringliteralstart:
+  token: bad
+  defaultedge: stringliteralstart
+
+  backslash: stringliteralescape
+  eof: cantmove
+  newline: cantmove
+  '"': stringliteral
+
+stringliteralescape:
+  token: bad
+
+  "'": stringliteralstart
+  '"': stringliteralstart
+  '?': stringliteralstart
+  backslash: stringliteralstart
+  a: stringliteralstart
+  b: stringliteralstart
+  f: stringliteralstart
+  n: stringliteralstart
+  r: stringliteralstart
+  t: stringliteralstart
+  v: stringliteralstart
+  octal: stringescapeoctal0
+  x: stringescapehexempty
+
+stringescapeoctal0:
+  defaultedge: stringliteralstart
+  token: bad
+
+  octal: stringescapeoctal1
+  '"': stringliteral
+  newline: cantmove
+  eof: cantmove
+
+stringescapeoctal1:
+  defaultedge: stringliteralstart
+  token: bad
+
+  octal: stringliteralstart
+  '"': stringliteral
+  newline: cantmove
+  eof: cantmove
+
+stringescapehexempty:
+  token: bad
+
+  hexadecimal: stringescapehex
+
+stringescapehex:
+  defaultedge: stringliteralstart
+  token: bad
+
+  newline: cantmove
+  eof: cantmove
+

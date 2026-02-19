@@ -1,7 +1,14 @@
 import os
+import sys
 import parseStatemachine
+import color
 
-files = map(lambda x: "stateMachine/" + x, os.listdir("stateMachine"))
+arg = "./stateMachine"
+
+if (len(sys.argv) >= 2):
+    arg = sys.argv[1]
+
+files = map(lambda x: os.path.join(arg, x), os.listdir(arg))
     
 data = parseStatemachine.collectStateTree(files)
 
@@ -76,10 +83,13 @@ def salvageCharRepr(char):
         return "\'\\'\'"
     return repr(char)
 
+def getColor(tokenType):
+    return "\"\\033[38;2;%d;%d;%dm\"" % (color.to_rgb(color.colors.get(tokenType) or (0xD4 / 255, 0xD4 / 255, 0xD4 / 255)))
+
 print(file % (
     ",\n    ".join(map(lambda x: x + "_token", tokens)) + ",\n    TOKENCOUNT",
     ",\n    ".join(map(lambda x: f"\"{x}\"", tokens)),
-    ",\n    ".join(map(lambda x: "\"\\033[38;2;86;156;214m\"", tokens)),
+    ",\n    ".join(map(getColor, tokens)),
     len(alphabet),
     "cantmove_state,\n    " + ",\n    ".join(map(lambda x: x + "_state", processedStates.keys())) + ",\n    STATECOUNT",
     ",\n    ".join(transitions),
