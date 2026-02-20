@@ -34,6 +34,7 @@ def normalizeStateTree(data):
         tokens.add(token)
     return definitions, processedData, tokens, alphabet
 
+NONASCII = object()
 EOF = object()
 # a state may only have one edge for each type of character, including edges derived from charset definitions.
 def validateState(state, definitions):

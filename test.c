@@ -42,7 +42,7 @@
 "\0000"         
 "\x0123G"       
 "??="           
-"Newline coming...\n...done"
+"Newline coming...\n...done 🙂"
 
 0xFFFFFFFFFFFFFFFFULL 
 '\xff'          

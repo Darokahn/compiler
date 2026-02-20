@@ -14,8 +14,9 @@ data = parseStatemachine.collectStateTree(files)
 
 definitions, processedStates, tokens, alphabet = parseStatemachine.normalizeStateTree(data)
 
-alphabetEnumeration = dict(zip(alphabet, range(1, len(alphabet) + 1)))
+alphabet.add(parseStatemachine.NONASCII)
 
+alphabetEnumeration = dict(zip(alphabet, range(1, len(alphabet) + 1)))
 
 correspondingTokens = list(map(lambda x: f"[{x}_state] = {processedStates[x]['token']}_token", list(processedStates.keys())))
 
@@ -79,6 +80,8 @@ processedStates.pop("cantmove", None)
 def salvageCharRepr(char):
     if char is parseStatemachine.EOF:
         return '255'
+    if char is parseStatemachine.NONASCII:
+        return '244'
     if char == "'":
         return "\'\\'\'"
     return repr(char)

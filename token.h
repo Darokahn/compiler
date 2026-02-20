@@ -88,10 +88,8 @@ static int token_prettyPrint(token_t* t) {
 
 static void token_init(token_t* t, char* lexeme, int lexemeLen, int type) {
     if (reservedWords.entries == NULL) initReserved();
-    /*
     int* tokEntry = table_lookup(&reservedWords, lexeme, lexemeLen);
     if (tokEntry != TABLE_NULL) type = KEYWORD;
-    */
     t->lexeme = lexeme;
     t->lexemeLen = lexemeLen;
     t->type = type;
