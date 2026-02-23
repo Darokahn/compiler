@@ -16,11 +16,12 @@ extern char* emptyString = "";
 typedef struct {
     char* fileBase;
     char* fileReader;
+    symbols_t* symbols;
     int length;
     int lineCount;
 } scanner_t;
 
-static void scanner_init(scanner_t* s, char* filename) {
+static void scanner_init(scanner_t* s, char* filename, symbols_t* symbols) {
     int fd = open(filename, O_RDONLY);
     if (fd < 0) {
         fprintf(stderr, "open %s failed: ", filename);
@@ -42,6 +43,7 @@ static void scanner_init(scanner_t* s, char* filename) {
     s->fileReader = s->fileBase;
     s->length = stat.st_size;
     s->lineCount = 1;
+    s->symbols = symbols;
 }
 
 static int scanner_getc(scanner_t* s) {
@@ -83,7 +85,7 @@ static token_t scanner_getNextToken(scanner_t* s) {
     scanner_ungetc(s);
     lexemeLen--;
     token_t tok;
-    token_init(&tok, lexemeBase, lexemeLen, lastTokenType);
+    token_init(&tok, lexemeBase, lexemeLen, lastTokenType, s->symbols);
     return tok;
 }
 

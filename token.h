@@ -6,90 +6,79 @@
 #include <string.h>
 #include "table/table.h"
 #include "stateMachineDefs.h"
+#include "symbols.h"
+#include "keywords.h"
 #define NAMESPACESIZE 4096
 
 struct token {
-    int type;
+    enum tokenType type;
+    union {
+        int i;
+        float f;
+        enum symbolType symbolType
+    };
     char* lexeme;
     int lexemeLen;
 };
 
+extern const char* symbolStrings[] = {
+    "variable",
+    "keyword",
+    "type"
+};
+
+extern const char* symbolColors[] = {
+    "\033[38;2;156;220;254m", // Light Blue (#9CDCFE) - Variables
+    "\033[38;2;197;134;192m", // Pink/Magenta (#C586C0) - Keywords (Control flow)
+    "\033[38;2;78;201;176m",  // Teal (#4EC9B0) - Types/Classes
+};
+
 typedef struct token token_t;
 
-table_t reservedWords = {0};
-
-char* generalKeywords[] = {
-    "auto",
-    "break",
-    "case",
-    "char",
-    "const",
-    "continue",
-    "default",
-    "do",
-    "double",
-    "else",
-    "enum",
-    "extern",
-    "float",
-    "for",
-    "goto",
-    "if",
-    "int",
-    "long",
-    "register",
-    "return",
-    "short",
-    "signed",
-    "sizeof",
-    "static",
-    "struct",
-    "switch",
-    "typedef",
-    "union",
-    "unsigned",
-    "void",
-    "volatile",
-    "while"
-};
-
-enum tokentypeExtension {
-    KEYWORD = TOKENCOUNT
-};
-
-void initReserved() {
-    table_init(&reservedWords, NAMESPACESIZE);
-    for (int i = 0; i < sizeof generalKeywords / sizeof *generalKeywords; i++) {
-        *table_insert(&reservedWords, generalKeywords[i], strlen(generalKeywords[i])) = KEYWORD;
+static const char* getTokenString(token_t* t) {
+    if (t->type == identifier_token) {
+        return symbolStrings[t->symbolType];
     }
+    return tokenTypeStrings[t->type];
+}
+
+static const char* getTokenColor(token_t* t) {
+    if (t->type == identifier_token) {
+        return symbolColors[t->symbolType];
+    }
+    return tokenTypeColors[t->type];
 }
 
 static int token_sdebug(token_t* t, char* output, int length) {
-    return snprintf(output, length, "%s \"%.*s\"\n", tokenTypeStrings[t->type], t->lexemeLen, t->lexeme);
+    return snprintf(output, length, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
 }
 
 static int token_fdebug(token_t* t, FILE* out) {
-    return fprintf(out, "%s \"%.*s\"\n", tokenTypeStrings[t->type], t->lexemeLen, t->lexeme);
+    return fprintf(out, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
 }
 
 static int token_debug(token_t* t) {
-    return printf("%s \"%.*s\"\n", tokenTypeStrings[t->type], t->lexemeLen, t->lexeme);
+    return token_fdebug(t, stdout);
 }
 
 static int token_debugPrettyPrint(token_t* t) {
-    printf("(%s)%s%.*s\033[0m", tokenTypeStrings[t->type], tokenTypeColors[t->type], t->lexemeLen, t->lexeme);
+    printf("(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
     fflush(stdout);
 }
 
 static int token_prettyPrint(token_t* t) {
-    printf("%s%.*s\033[0m", tokenTypeColors[t->type], t->lexemeLen, t->lexeme);
+    printf("%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
     fflush(stdout);
 }
 
-static void token_init(token_t* t, char* lexeme, int lexemeLen, int type) {
-    if (reservedWords.entries == NULL) initReserved();
-    int* tokEntry = table_lookup(&reservedWords, lexeme, lexemeLen);
-    if (tokEntry != TABLE_NULL) type = KEYWORD;
+static void token_init(token_t* t, char* lexeme, int lexemeLen, int type, symbols_t* symbols) {
+    if (type == identifier_token) {
+        symbol_t* symbol = symbols_lookup(symbols, lexeme, lexemeLen);
+        if (symbol != NULL) {
+            t->symbolType = symbol->type;
+        }
+        else t->symbolType = VARIABLE;
+    }
     t->lexeme = lexeme;
     t->lexemeLen = lexemeLen;
     t->type = type;
