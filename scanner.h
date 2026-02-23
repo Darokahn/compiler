@@ -11,11 +11,11 @@
 #include "stateMachineDefs.h"
 #include "stateMachine.h"
 
-static char* emptyString = "";
+static unsigned char* emptyString = "";
 
 typedef struct {
-    char* fileBase;
-    char* fileReader;
+    unsigned char* fileBase;
+    unsigned char* fileReader;
     symbols_t* symbols;
     int length;
     int lineCount;
@@ -51,7 +51,7 @@ static int scanner_getc(scanner_t* s) {
         s->fileReader++;
         return EOF;
     }
-    char c = *s->fileReader;
+    int c = *s->fileReader;
     s->fileReader++;
     return c;
 }

@@ -1,3 +1,4 @@
+"🙂Newline coming...\n...done "
 int
 if
 0               
@@ -44,7 +45,6 @@ if
 "\0000"         
 "\x0123G"       
 "??="           
-"Newline coming...\n...done 🙂"
 
 0xFFFFFFFFFFFFFFFFULL 
 '\xff'          
