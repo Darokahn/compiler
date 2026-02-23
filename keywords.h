@@ -25,7 +25,7 @@ enum keywords {
     LASTKEYWORD
 };
 
-extern const char* keywordStrings[] = {
+static const char* keywordStrings[] = {
     "auto",
     "break",
     "case",
@@ -64,7 +64,7 @@ enum builtinTypes {
     LASTTYPE,
 };
 
-extern const char* builtinTypeStrings[] = {
+static const char* builtinTypeStrings[] = {
     "char",
     "void",
     "short",

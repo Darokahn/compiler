@@ -13,7 +13,7 @@ enum symbolType {
     type_symbol
 };
 
-extern const char* symbolStrings[] = {
+static const char* symbolStrings[] = {
     "variable",
     "keyword",
     "type"
@@ -79,6 +79,7 @@ static void symbols_delete(symbols_t* t, const char* name, int nameLen) {
     t->count--;
     symbol_t reIndex = t->storage[deletedIndex];
     *table_lookup(&t->table, reIndex.name, reIndex.nameLen) = deletedIndex;
+    table_delete(&t->table, name, nameLen);
 }
 
 static void symbols_destroy(symbols_t* t) {
@@ -97,7 +98,7 @@ int symbols_adebug(symbols_t* t, void* out, int outType) {
     char* fmt = "symbol table with length %d: {%s";
     if (outType == 0) {
         charsPrinted += sprintf(s, fmt, t->count, newlineString);
-        s += charsPrinted;
+        s = (char*) out + charsPrinted;
     }
     else charsPrinted += fprintf(f, fmt, t->count, newlineString);
     fmt = "%s{name: %.*s, type: %s}%s";
@@ -105,14 +106,14 @@ int symbols_adebug(symbols_t* t, void* out, int outType) {
         symbol_t sym = t->storage[i];
         if (outType == 0) {
             charsPrinted += sprintf(s, fmt, tabString, sym.nameLen, sym.name, symbolStrings[sym.type], newlineString);
-            s += charsPrinted;
+            s = (char*) out + charsPrinted;
         }
         else charsPrinted += fprintf(f, fmt, tabString, sym.nameLen, sym.name, symbolStrings[sym.type], newlineString);
     }
     fmt = "}%s";
     if (outType == 0) {
         charsPrinted += sprintf(s, fmt, newlineString);
-        s += charsPrinted;
+        s = (char*) out + charsPrinted;
     }
     else charsPrinted += fprintf(f, fmt, newlineString);
     return charsPrinted;

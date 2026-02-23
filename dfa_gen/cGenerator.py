@@ -48,11 +48,11 @@ enum tokenType {
     %s
 };
 
-extern const char* tokenTypeStrings[TOKENCOUNT] = {
+static const char* tokenTypeStrings[TOKENCOUNT] = {
     %s
 };
 
-extern const char* tokenTypeColors[TOKENCOUNT] = {
+static const char* tokenTypeColors[TOKENCOUNT] = {
     %s
 };
 
@@ -62,15 +62,15 @@ enum state {
     %s
 };
 
-extern enum state stateMachine_transitions[STATECOUNT][MAXCHAR + 1] = {
+static enum state stateMachine_transitions[STATECOUNT][MAXCHAR + 1] = {
     %s
 };
 
-extern enum tokenType stateMachine_correspondingTokens[STATECOUNT] = {
+static enum tokenType stateMachine_correspondingTokens[STATECOUNT] = {
     %s
 };
 
-extern unsigned char asciiEnumeration[] = {
+static unsigned char asciiEnumeration[] = {
     %s
 };
 """

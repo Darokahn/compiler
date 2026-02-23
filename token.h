@@ -15,13 +15,13 @@ struct token {
     union {
         int i;
         float f;
-        enum symbolType symbolType
+        enum symbolType symbolType;
     };
     char* lexeme;
     int lexemeLen;
 };
 
-extern const char* symbolColors[] = {
+static const char* symbolColors[] = {
     "\033[38;2;156;220;254m", // Light Blue (#9CDCFE) - Variables
     "\033[38;2;197;134;192m", // Pink/Magenta (#C586C0) - Keywords (Control flow)
     "\033[38;2;78;201;176m",  // Teal (#4EC9B0) - Types/Classes

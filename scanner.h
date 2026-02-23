@@ -11,7 +11,7 @@
 #include "stateMachineDefs.h"
 #include "stateMachine.h"
 
-extern char* emptyString = "";
+static char* emptyString = "";
 
 typedef struct {
     char* fileBase;
