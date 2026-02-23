@@ -40,19 +40,19 @@ void scanAndPrintDebug(char* filename, symbols_t* symbols) {
 
 void initSymbols(symbols_t* t) {
     symbols_init(t, NAMESPACESIZE);
-    symbols_add(t, "", 0, (symbol_t) {0});
     for (int i = 0; i < LASTKEYWORD; i++) {
         symbol_t sym = {
-            .type = KEYWORD
+            .type = keyword_symbol
         };
         symbols_add(t, keywordStrings[i], strlen(keywordStrings[i]), sym);
     }
     for (int i = 0; i < LASTTYPE; i++) {
         symbol_t sym = {
-            .type = TYPE
+            .type = type_symbol
         };
         symbols_add(t, builtinTypeStrings[i], strlen(builtinTypeStrings[i]), sym);
     }
+    symbols_debug(t);
 }
 
 int main() {

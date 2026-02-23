@@ -8,9 +8,15 @@
 #include "table/table.h"
 
 enum symbolType {
-    VARIABLE,
-    KEYWORD,
-    TYPE
+    variable_symbol,
+    keyword_symbol,
+    type_symbol
+};
+
+extern const char* symbolStrings[] = {
+    "variable",
+    "keyword",
+    "type"
 };
 
 typedef struct {} variable_t;
@@ -38,6 +44,8 @@ typedef struct {
 } symbols_t;
 
 static void symbols_init(symbols_t* t, int initialSize) {
+    t->count = 0;
+    t->capacity = initialSize;
     table_init(&t->table, initialSize);
     t->storage = malloc(sizeof *t->storage * initialSize);
 }
@@ -78,4 +86,46 @@ static void symbols_destroy(symbols_t* t) {
         free(t->storage);
     }
     table_destroy(&t->table);
+}
+
+int symbols_adebug(symbols_t* t, void* out, int outType) {
+    int charsPrinted = 0;
+    char* tabString = "    ";
+    char* newlineString = "\n";
+    FILE* f = (FILE*) out;
+    char* s = (char*) out;
+    char* fmt = "symbol table with length %d: {%s";
+    if (outType == 0) {
+        charsPrinted += sprintf(s, fmt, t->count, newlineString);
+        s += charsPrinted;
+    }
+    else charsPrinted += fprintf(f, fmt, t->count, newlineString);
+    fmt = "%s{name: %.*s, type: %s}%s";
+    for (int i = 0; i < t->count; i++) {
+        symbol_t sym = t->storage[i];
+        if (outType == 0) {
+            charsPrinted += sprintf(s, fmt, tabString, sym.nameLen, sym.name, symbolStrings[sym.type], newlineString);
+            s += charsPrinted;
+        }
+        else charsPrinted += fprintf(f, fmt, tabString, sym.nameLen, sym.name, symbolStrings[sym.type], newlineString);
+    }
+    fmt = "}%s";
+    if (outType == 0) {
+        charsPrinted += sprintf(s, fmt, newlineString);
+        s += charsPrinted;
+    }
+    else charsPrinted += fprintf(f, fmt, newlineString);
+    return charsPrinted;
+}
+
+int symbols_fdebug(symbols_t* t, FILE* out) {
+    return symbols_adebug(t, out, 1);
+}
+
+int symbols_sdebug(symbols_t* t, char* out, int len) {
+    return symbols_adebug(t, out, 0);
+}
+
+int symbols_debug(symbols_t* t) {
+    return symbols_fdebug(t, stdout);
 }

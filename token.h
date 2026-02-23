@@ -21,12 +21,6 @@ struct token {
     int lexemeLen;
 };
 
-extern const char* symbolStrings[] = {
-    "variable",
-    "keyword",
-    "type"
-};
-
 extern const char* symbolColors[] = {
     "\033[38;2;156;220;254m", // Light Blue (#9CDCFE) - Variables
     "\033[38;2;197;134;192m", // Pink/Magenta (#C586C0) - Keywords (Control flow)
@@ -77,7 +71,7 @@ static void token_init(token_t* t, char* lexeme, int lexemeLen, int type, symbol
         if (symbol != NULL) {
             t->symbolType = symbol->type;
         }
-        else t->symbolType = VARIABLE;
+        else t->symbolType = variable_symbol;
     }
     t->lexeme = lexeme;
     t->lexemeLen = lexemeLen;
