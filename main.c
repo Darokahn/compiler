@@ -59,6 +59,6 @@ int main() {
     symbols_t symbols;
     initSymbols(&symbols);
     scanAndPrint("main.c", &symbols);
-    scanAndPrintDebug("test.c", &symbols);
+    //scanAndPrintDebug("test.c", &symbols);
     printf("\n");
 }

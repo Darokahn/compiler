@@ -19,11 +19,17 @@ static const char* symbolStrings[] = {
     "type"
 };
 
-typedef struct {} variable_t;
+typedef struct {
+    int value;
+} variable_t;
 
-typedef struct {} keyword_t;
+typedef struct {
+    int id;
+} keyword_t;
 
-typedef struct {} type_t;
+typedef struct {
+    int id;
+} type_t;
 
 typedef struct {
     const char* name;
@@ -73,6 +79,10 @@ static symbol_t* symbols_lookup(symbols_t* t, const char* name, int nameLen) {
     return &(t->storage[index]);
 }
 
+bool symbols_exists(symbols_t* t, const char* name, int nameLen) {
+    return symbols_lookup(t, name, nameLen) != NULL;
+}
+
 static void symbols_delete(symbols_t* t, const char* name, int nameLen) {
     int deletedIndex = *table_lookup(&t->table, name, nameLen);
     t->storage[deletedIndex] = t->storage[t->count - 1];
@@ -89,19 +99,18 @@ static void symbols_destroy(symbols_t* t) {
     table_destroy(&t->table);
 }
 
-int symbols_adebug(symbols_t* t, void* out, int outType) {
+int symbols_adebug(symbols_t* t, void* out, int outType, const char* tabString, char* newlineString) {
     int charsPrinted = 0;
-    char* tabString = "    ";
-    char* newlineString = "\n";
     FILE* f = (FILE*) out;
     char* s = (char*) out;
+print:
     char* fmt = "symbol table with length %d: {%s";
     if (outType == 0) {
         charsPrinted += sprintf(s, fmt, t->count, newlineString);
         s = (char*) out + charsPrinted;
     }
     else charsPrinted += fprintf(f, fmt, t->count, newlineString);
-    fmt = "%s{name: %.*s, type: %s}%s";
+    fmt = "%sname: %.*s, type: %s%s";
     for (int i = 0; i < t->count; i++) {
         symbol_t sym = t->storage[i];
         if (outType == 0) {
@@ -119,14 +128,14 @@ int symbols_adebug(symbols_t* t, void* out, int outType) {
     return charsPrinted;
 }
 
-int symbols_fdebug(symbols_t* t, FILE* out) {
-    return symbols_adebug(t, out, 1);
+int symbols_fdebug(symbols_t* t, FILE* out, char* tabString, char* newlineString) {
+    return symbols_adebug(t, out, 1, tabString, newlineString);
 }
 
-int symbols_sdebug(symbols_t* t, char* out, int len) {
-    return symbols_adebug(t, out, 0);
+int symbols_sdebug(symbols_t* t, char* out, int len, char* tabString, char* newlineString) {
+    return symbols_adebug(t, out, 0, tabString, newlineString);
 }
 
 int symbols_debug(symbols_t* t) {
-    return symbols_fdebug(t, stdout);
+    return symbols_fdebug(t, stdout, "    ", "\n");
 }
