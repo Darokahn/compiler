@@ -51,4 +51,3 @@ for stateName, state in processedStates.items():
         dot.edge(stateName, dest, label=label)
 
 dot.render("graph", format="png", cleanup=True)
-print("Graph saved to statemachine_graph.png")

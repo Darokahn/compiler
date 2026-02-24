@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "keywords.h"
 #include "table/table.h"
@@ -19,16 +20,15 @@ static const char* symbolStrings[] = {
     "type"
 };
 
+// As I build on the compiler, these three items will gain the information necessary
 typedef struct {
     int value;
 } variable_t;
 
 typedef struct {
-    int id;
 } keyword_t;
 
 typedef struct {
-    int id;
 } type_t;
 
 typedef struct {
@@ -103,21 +103,28 @@ int symbols_adebug(symbols_t* t, void* out, int outType, const char* tabString, 
     int charsPrinted = 0;
     FILE* f = (FILE*) out;
     char* s = (char*) out;
-print:
     char* fmt = "symbol table with length %d: {%s";
     if (outType == 0) {
         charsPrinted += sprintf(s, fmt, t->count, newlineString);
         s = (char*) out + charsPrinted;
     }
     else charsPrinted += fprintf(f, fmt, t->count, newlineString);
-    fmt = "%sname: %.*s, type: %s%s";
+    int maxName = 0;
+    for (int i = 0; i < t->count; i++) {
+        symbol_t sym = t->storage[i];
+        if (sym.nameLen > maxName) {
+            maxName = sym.nameLen;
+        }
+    }
+    fmt = "%sname: %.*s,\x1b[%dGtype: %s%s";
+    int initialLen = strlen(tabString) + sizeof ("name: ") + 3;
     for (int i = 0; i < t->count; i++) {
         symbol_t sym = t->storage[i];
         if (outType == 0) {
-            charsPrinted += sprintf(s, fmt, tabString, sym.nameLen, sym.name, symbolStrings[sym.type], newlineString);
+            charsPrinted += sprintf(s, fmt, tabString, sym.nameLen, sym.name, initialLen + maxName, symbolStrings[sym.type], newlineString);
             s = (char*) out + charsPrinted;
         }
-        else charsPrinted += fprintf(f, fmt, tabString, sym.nameLen, sym.name, symbolStrings[sym.type], newlineString);
+        else charsPrinted += fprintf(f, fmt, tabString, sym.nameLen, sym.name, initialLen + maxName, symbolStrings[sym.type], newlineString);
     }
     fmt = "}%s";
     if (outType == 0) {
