@@ -19,6 +19,7 @@ typedef struct node node;
 struct node {
     int size;
     int lastChild;
+    int firstChild;
     int nextSibling;
 };
     static node* node_from(node* n, int offset) {
@@ -28,15 +29,18 @@ struct node {
         return ((intptr_t) n2 - (intptr_t) n1);
     }
     static node* node_firstChild(node* n) {
+        if (n->firstChild == 0) return NULL;
         return node_from(n, n->size);
     }
     static node* node_nextSibling(node* n) {
+        if (n->nextSibling == 0) return NULL;
         return node_from(n, n->nextSibling);
     }
     static void node_init(node*n, int size) {
         n->size = size;
         n->nextSibling = 0;
-        n->lastChild = n->size;
+        n->lastChild = 0;
+        n->firstChild = 0;
     }
 
 
@@ -72,6 +76,11 @@ typedef struct {
     static int nodeBase_addChild(nodeBase* b, int parentIndex, node* newNode) {
         newNode = nodeBase_add(b, newNode);
         node* parent = node_from(b->base, parentIndex);
+        int newNodeOffset = node_between(parent, newNode);
+        if (parent->firstChild == 0) {
+            parent->firstChild = newNodeOffset;
+            parent->lastChild = parent->firstChild;
+        }
         node* lastChild = node_from(parent, parent->lastChild);
         lastChild->nextSibling = node_between(lastChild, newNode);
         parent->lastChild = node_between(parent, newNode);

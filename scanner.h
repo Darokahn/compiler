@@ -89,6 +89,13 @@ static token_t scanner_getNextToken(scanner_t* s) {
     return tok;
 }
 
+static token_t scanner_peekNextToken(scanner_t* s) {
+    scanner_t snapshot = *s;
+    token_t tok = scanner_getNextToken(s);
+    *s = snapshot;
+    return tok;
+}
+
 static void scanner_destroy(scanner_t* s) {
     if (s->fileBase != NULL && s->fileBase != emptyString) {
         munmap(s->fileBase, s->length);
