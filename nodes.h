@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 
 #define maxalign(ptr) (void*)((intptr_t)(((uint8_t*)ptr) + (__alignof (max_align_t) - 1)) & (~(__alignof (max_align_t) - 1 )))
 
@@ -17,11 +18,25 @@ typedef struct node node;
 
 struct node {
     int size;
+    int lastChild;
+    int nextSibling;
 };
-    node* node_next(void* n) {
-        n = (node*)((uint8_t*) n + ((node*)n)->size);
-        n = maxalign(n);
-        return n;
+    static node* node_from(node* n, int offset) {
+        return (node*) ((uint8_t*) n + offset);
+    }
+    static intptr_t node_between(node* n1, node* n2) {
+        return ((intptr_t) n2 - (intptr_t) n1);
+    }
+    static node* node_firstChild(node* n) {
+        return node_from(n, n->size);
+    }
+    static node* node_nextSibling(node* n) {
+        return node_from(n, n->nextSibling);
+    }
+    static void node_init(node*n, int size) {
+        n->size = size;
+        n->nextSibling = 0;
+        n->lastChild = n->size;
     }
 
 
@@ -32,23 +47,41 @@ typedef struct {
 } nodeBase;
     static void nodeBase_init(nodeBase* b, int initialSize) {
         *b = (nodeBase){0};
-        b->blockCapacity = initialSize;
+        b->blockCapacity = MAX(initialSize, sizeof (node));
         b->base = malloc(b->blockCapacity); // blockCapacity is in bytes.
         b->lastNode = b->base;
+        *b->lastNode = (node) {0};
     }
-    static void nodeBase_add(nodeBase* b, void* newNodePtr) {
-        node* newNode = (node*) newNodePtr;
+    static node* nodeBase_add(nodeBase* b, node* newNode) {
         uint8_t* base = (uint8_t*)b->lastNode;
         base += b->lastNode->size;
         base = maxalign(base);
         size_t size = (uint8_t*)base - (uint8_t*)b->base;
-        if (size + newNode->size >= b->blockCapacity) {
+        int minimumSize = size + newNode->size;
+        if (minimumSize >= b->blockCapacity) {
             b->blockCapacity *= 2;
+            b->blockCapacity = MAX(b->blockCapacity, minimumSize);
             b->base = realloc(b->base, b->blockCapacity);
             base = (uint8_t*)b->base + size;
         }
         memcpy(base, newNode, newNode->size);
         b->lastNode = (node*) base;
+        return b->lastNode;
+    }
+
+    static int nodeBase_addChild(nodeBase* b, int parentIndex, node* newNode) {
+        newNode = nodeBase_add(b, newNode);
+        node* parent = node_from(b->base, parentIndex);
+        node* lastChild = node_from(parent, parent->lastChild);
+        lastChild->nextSibling = node_between(lastChild, newNode);
+        parent->lastChild = node_between(parent, newNode);
+        return node_between(b->base, newNode);
+    }
+
+    static void nodeBase_destroy(nodeBase* b) {
+        if (b->base != NULL) {
+            free(b->base);
+        }
     }
 
 typedef struct startNode {
@@ -68,13 +101,13 @@ typedef struct blockNode {
 
 typedef struct statementGroupNode {
     node node;
-    int statementCount;
+    int lastStatement;
     align statements[];
 } statementGroupNode;
 
 typedef struct statementNode {
     node node;
-    int size;
+    int next;
 } statementNode;
 
 typedef struct declarationStatementNode {
@@ -85,22 +118,26 @@ typedef struct declarationStatementNode {
 typedef int (*evalFunc)(void*);
 
 typedef struct expressionNode {
-    int size;
+    node node;
     evalFunc eval;
 } expressionNode;
+    static void expressionNode_init(expressionNode* n, evalFunc eval, int size) {
+        node_init((node*) n, size);
+        n->eval = eval;
+    }
 
 typedef struct integerNode {
     expressionNode node;
     int value;
 } integerNode;
 
-    static int integerNode_eval(integerNode* n) {
+    static int integerNode_eval(void* nptr) {
+        integerNode* n = (integerNode*) nptr;
         return n->value;
     }
 
     static void integerNode_init(integerNode* n, int inner) {
-        n->node.size = sizeof (integerNode);
-        n->node.eval = (evalFunc) integerNode_eval;
+        expressionNode_init((expressionNode*) n, integerNode_eval, sizeof *n);
         n->value = inner;
     }
 
@@ -111,7 +148,8 @@ typedef struct identifierNode {
     symbols_t* symbols;
 } identifierNode;
 
-    static int identifierNode_eval(identifierNode* n) {
+    static int identifierNode_eval(void* nptr) {
+        identifierNode* n = (identifierNode*) nptr;
         symbol_t* sym = symbols_lookup(n->symbols, n->lexeme, n->lexemeLen);
         return sym->v.value;
     }
@@ -126,161 +164,63 @@ typedef struct identifierNode {
     }
 
     static void identifierNode_init(identifierNode* n, char* lexeme, int lexemeLen, symbols_t* symbols) {
-        n->node.size = sizeof (identifierNode);
-        n->node.eval = (evalFunc) identifierNode_eval;
+        expressionNode_init((expressionNode*) n, identifierNode_eval, sizeof *n);
         n->lexeme = lexeme;
         n->lexemeLen = lexemeLen;
         n->symbols = symbols;
     }
 
+typedef int (*arithmeticFunc)(int, int);
+
 typedef struct {
     expressionNode node;
+    arithmeticFunc operator;
     align operands[];
 } binaryOperatorNode;
     
-    static int binaryOperatorNode_eval(binaryOperatorNode* n) {
-        return 0;
+    static int binaryOperatorNode_eval(void* nptr) {
+        binaryOperatorNode* n = (binaryOperatorNode*) nptr;
+        expressionNode* lhs = (expressionNode*) node_firstChild((node*) n);
+        expressionNode* rhs = (expressionNode*) node_nextSibling((node*) lhs);
+        return n->operator(lhs->eval(lhs), rhs->eval(rhs));
     }
 
-    static void binaryOperatorNode_init(binaryOperatorNode* n) {
-        n->node.size = sizeof (binaryOperatorNode);
-        n->node.eval = (evalFunc) binaryOperatorNode_eval;
+    static void binaryOperatorNode_init(binaryOperatorNode* n, arithmeticFunc operator, int size) {
+        expressionNode_init((expressionNode*) n, binaryOperatorNode_eval, size);
+        n->operator = operator;
     }
 
 typedef struct {
-    expressionNode node;
+    binaryOperatorNode node;
 } plusOperatorNode;
-    static int plusOperatorNode_eval(plusOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) + rhs->eval(rhs);
+    static int plusOperatorNode_op(int x, int y) {
+        return x + y;
     }
     static void plusOperatorNode_init(plusOperatorNode* n) {
-        n->node.size = sizeof (plusOperatorNode);
-        n->node.eval = (evalFunc) plusOperatorNode_eval;
+        binaryOperatorNode_init((binaryOperatorNode*) n, plusOperatorNode_op, sizeof *n);
     }
 
-typedef struct {
-    expressionNode node;
-} minusOperatorNode;
+#define DEFINE_BINARY_OP(name, op) \
+typedef struct { binaryOperatorNode node; } name##OperatorNode; \
+static int name##OperatorNode_op(int x, int y) { return x op y; } \
+static void name##OperatorNode_init(name##OperatorNode* n) { \
+    binaryOperatorNode_init((binaryOperatorNode*) n, name##OperatorNode_op, sizeof *n); \
+}
 
-    static int minusOperatorNode_eval(minusOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) - rhs->eval(rhs);
-    }
-
-    static void minusOperatorNode_init(minusOperatorNode* n) {
-        n->node.size = sizeof (minusOperatorNode);
-        n->node.eval = (int (*)(void*)) minusOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} timesOperatorNode;
-
-    static int timesOperatorNode_eval(timesOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) * rhs->eval(rhs);
-    }
-
-    static void timesOperatorNode_init(timesOperatorNode* n) {
-        n->node.size = sizeof (timesOperatorNode);
-        n->node.eval = (int (*)(void*)) timesOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} divideOperatorNode;
-
-    static int divideOperatorNode_eval(divideOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        int divisor = rhs->eval(rhs);
-        if (divisor == 0) return 0;
-        return lhs->eval(lhs) / divisor;
-    }
-
-    static void divideOperatorNode_init(divideOperatorNode* n) {
-        n->node.size = sizeof (divideOperatorNode);
-        n->node.eval = (int (*)(void*)) divideOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} equalOperatorNode;
-    static int equalOperatorNode_eval(equalOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) == rhs->eval(rhs);
-    }
-    static void equalOperatorNode_init(equalOperatorNode* n) {
-        n->node.size = sizeof (equalOperatorNode);
-        n->node.eval = (int (*)(void*)) equalOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} notEqualOperatorNode;
-    static int notEqualOperatorNode_eval(notEqualOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) != rhs->eval(rhs);
-    }
-    static void notEqualOperatorNode_init(notEqualOperatorNode* n) {
-        n->node.size = sizeof (notEqualOperatorNode);
-        n->node.eval = (int (*)(void*)) notEqualOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} lessThanOperatorNode;
-    static int lessThanOperatorNode_eval(lessThanOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) < rhs->eval(rhs);
-    }
-    static void lessThanOperatorNode_init(lessThanOperatorNode* n) {
-        n->node.size = sizeof (lessThanOperatorNode);
-        n->node.eval = (int (*)(void*)) lessThanOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} greaterThanOperatorNode;
-    static int greaterThanOperatorNode_eval(greaterThanOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) > rhs->eval(rhs);
-    }
-    static void greaterThanOperatorNode_init(greaterThanOperatorNode* n) {
-        n->node.size = sizeof (greaterThanOperatorNode);
-        n->node.eval = (int (*)(void*)) greaterThanOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} lessEqualOperatorNode;
-    static int lessEqualOperatorNode_eval(lessEqualOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) <= rhs->eval(rhs);
-    }
-    static void lessEqualOperatorNode_init(lessEqualOperatorNode* n) {
-        n->node.size = sizeof (lessEqualOperatorNode);
-        n->node.eval = (int (*)(void*)) lessEqualOperatorNode_eval;
-    }
-
-typedef struct {
-    expressionNode node;
-} greaterEqualOperatorNode;
-    static int greaterEqualOperatorNode_eval(greaterEqualOperatorNode* n) {
-        expressionNode* lhs = (expressionNode*) node_next(n);
-        expressionNode* rhs = (expressionNode*) node_next(lhs);
-        return lhs->eval(lhs) >= rhs->eval(rhs);
-    }
-    static void greaterEqualOperatorNode_init(greaterEqualOperatorNode* n) {
-        n->node.size = sizeof (greaterEqualOperatorNode);
-        n->node.eval = (int (*)(void*)) greaterEqualOperatorNode_eval;
-    }
+DEFINE_BINARY_OP(minus, -);
+DEFINE_BINARY_OP(times, *);
+DEFINE_BINARY_OP(divide, /);
+DEFINE_BINARY_OP(mod, %);
+DEFINE_BINARY_OP(and, &&);
+DEFINE_BINARY_OP(or, ||);
+DEFINE_BINARY_OP(bitwiseAnd, &);
+DEFINE_BINARY_OP(bitwiseOr, |);
+DEFINE_BINARY_OP(xor, ^);
+DEFINE_BINARY_OP(shl, <<);
+DEFINE_BINARY_OP(shr, >>);
+DEFINE_BINARY_OP(eq, ==);
+DEFINE_BINARY_OP(neq, !=);
+DEFINE_BINARY_OP(ge, >=);
+DEFINE_BINARY_OP(gt, >);
+DEFINE_BINARY_OP(le, <=);
+DEFINE_BINARY_OP(lt, <);

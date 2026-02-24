@@ -32,7 +32,7 @@ typedef struct {
 } type_t;
 
 typedef struct {
-    const char* name;
+    char* name;
     int nameLen;
     int type;
     union {
@@ -56,7 +56,7 @@ static void symbols_init(symbols_t* t, int initialSize) {
     t->storage = malloc(sizeof *t->storage * initialSize);
 }
 
-static void symbols_add(symbols_t* t, const char* name, int nameLen, symbol_t symbol) {
+static void symbols_add(symbols_t* t, char* name, int nameLen, symbol_t symbol) {
     if (t->capacity == t->count) {
         t->capacity *= 2;
         t->storage = realloc(t->storage, sizeof *t->storage * t->capacity);
@@ -69,7 +69,7 @@ static void symbols_add(symbols_t* t, const char* name, int nameLen, symbol_t sy
     t->count++;
 }
 
-static symbol_t* symbols_lookup(symbols_t* t, const char* name, int nameLen) {
+static symbol_t* symbols_lookup(symbols_t* t, char* name, int nameLen) {
     int* indexPtr = table_lookup(&t->table, name, nameLen);
     if (indexPtr == TABLE_NULL) {
         return NULL;
@@ -79,11 +79,11 @@ static symbol_t* symbols_lookup(symbols_t* t, const char* name, int nameLen) {
     return &(t->storage[index]);
 }
 
-bool symbols_exists(symbols_t* t, const char* name, int nameLen) {
+static bool symbols_exists(symbols_t* t, char* name, int nameLen) {
     return symbols_lookup(t, name, nameLen) != NULL;
 }
 
-static void symbols_delete(symbols_t* t, const char* name, int nameLen) {
+static void symbols_delete(symbols_t* t, char* name, int nameLen) {
     int deletedIndex = *table_lookup(&t->table, name, nameLen);
     t->storage[deletedIndex] = t->storage[t->count - 1];
     t->count--;
@@ -99,7 +99,7 @@ static void symbols_destroy(symbols_t* t) {
     table_destroy(&t->table);
 }
 
-int symbols_adebug(symbols_t* t, void* out, int outType, const char* tabString, char* newlineString) {
+static int symbols_adebug(symbols_t* t, void* out, int outType, char* tabString, char* newlineString) {
     int charsPrinted = 0;
     FILE* f = (FILE*) out;
     char* s = (char*) out;
@@ -135,14 +135,14 @@ int symbols_adebug(symbols_t* t, void* out, int outType, const char* tabString, 
     return charsPrinted;
 }
 
-int symbols_fdebug(symbols_t* t, FILE* out, char* tabString, char* newlineString) {
+static int symbols_fdebug(symbols_t* t, FILE* out, char* tabString, char* newlineString) {
     return symbols_adebug(t, out, 1, tabString, newlineString);
 }
 
-int symbols_sdebug(symbols_t* t, char* out, int len, char* tabString, char* newlineString) {
+static int symbols_sdebug(symbols_t* t, char* out, int len, char* tabString, char* newlineString) {
     return symbols_adebug(t, out, 0, tabString, newlineString);
 }
 
-int symbols_debug(symbols_t* t) {
+static int symbols_debug(symbols_t* t) {
     return symbols_fdebug(t, stdout, "    ", "\n");
 }
