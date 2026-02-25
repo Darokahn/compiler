@@ -40,7 +40,6 @@ int main() {
         
         linePrinter_stream(&printer, "\n");
         heapString result = test(&printer, (void*)linePrinter_stream);
-        //heapString result = test(stdout, (void*)fprintf);
         fflush(stdout);
 
         if (result != NULL) {
