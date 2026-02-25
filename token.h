@@ -43,6 +43,10 @@ static const char* getTokenColor(token_t* t) {
     return tokenTypeColors[t->type];
 }
 
+static int token_adebug(token_t* t, void* od, outfunc of) {
+    return of(od, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
+}
+
 static int token_sdebug(token_t* t, char* output, int length) {
     return snprintf(output, length, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
 }
@@ -56,15 +60,27 @@ static int token_debug(token_t* t) {
 }
 
 static int token_debugPrettyPrint(token_t* t) {
-    printf("(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
+    return printf("(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
     fflush(stdout);
+}
+
+static int token_sdebugPrettyPrint(token_t* t, char* output, int length) {
+    return snprintf(output, length, "(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
 }
 
 static int token_prettyPrint(token_t* t) {
-    printf("%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
+    int printed = printf("%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
     fflush(stdout);
+    return printed;
 }
 
+static int token_sprettyPrint(token_t* t, char* output, int length) {
+    return snprintf(output, length, "%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
+}
+
+static int token_fprettyPrint(token_t* t, char* output, int length) {
+    snprintf(output, length, "%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
+}
 static void token_init(token_t* t, char* lexeme, int lexemeLen, int type, symbols_t* symbols) {
     if (type == identifier_token) {
         symbol_t* symbol = symbols_lookup(symbols, lexeme, lexemeLen);

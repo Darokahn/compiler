@@ -7,6 +7,7 @@
 
 #include "keywords.h"
 #include "table/table.h"
+#include "stringStreaming.h"
 
 enum symbolType {
     variable_symbol,
@@ -99,48 +100,34 @@ static void symbols_destroy(symbols_t* t) {
     table_destroy(&t->table);
 }
 
-static int symbols_adebug(symbols_t* t, void* out, int outType, char* tabString, char* newlineString) {
+static int symbols_adebug(symbols_t* t, void* od, int (*of)(void*, char*, ...), char* tabString, char* newlineString) {
     int charsPrinted = 0;
-    FILE* f = (FILE*) out;
-    char* s = (char*) out;
     char* fmt = "symbol table with length %d: {%s";
-    if (outType == 0) {
-        charsPrinted += sprintf(s, fmt, t->count, newlineString);
-        s = (char*) out + charsPrinted;
-    }
-    else charsPrinted += fprintf(f, fmt, t->count, newlineString);
+    charsPrinted += of(od, fmt, t->count, newlineString);
     int maxName = 0;
+    int namePadding = 3;
     for (int i = 0; i < t->count; i++) {
         symbol_t sym = t->storage[i];
         if (sym.nameLen > maxName) {
             maxName = sym.nameLen;
         }
     }
-    fmt = "%sname: %.*s,\x1b[%dGtype: %s%s";
-    int initialLen = strlen(tabString) + sizeof ("name: ") + 3;
+    fmt = "%sname: \x1b[s%.*s,\x1b[u\x1b[%dCtype: %s%s";
     for (int i = 0; i < t->count; i++) {
         symbol_t sym = t->storage[i];
-        if (outType == 0) {
-            charsPrinted += sprintf(s, fmt, tabString, sym.nameLen, sym.name, initialLen + maxName, symbolStrings[sym.type], newlineString);
-            s = (char*) out + charsPrinted;
-        }
-        else charsPrinted += fprintf(f, fmt, tabString, sym.nameLen, sym.name, initialLen + maxName, symbolStrings[sym.type], newlineString);
+        charsPrinted += of(od, fmt, tabString, sym.nameLen, sym.name, maxName + namePadding, symbolStrings[sym.type], newlineString);
     }
     fmt = "}%s";
-    if (outType == 0) {
-        charsPrinted += sprintf(s, fmt, newlineString);
-        s = (char*) out + charsPrinted;
-    }
-    else charsPrinted += fprintf(f, fmt, newlineString);
+    charsPrinted += of(od, fmt, newlineString);
     return charsPrinted;
 }
 
 static int symbols_fdebug(symbols_t* t, FILE* out, char* tabString, char* newlineString) {
-    return symbols_adebug(t, out, 1, tabString, newlineString);
+    return symbols_adebug(t, out, (void*) fprintf, tabString, newlineString);
 }
 
 static int symbols_sdebug(symbols_t* t, char* out, int len, char* tabString, char* newlineString) {
-    return symbols_adebug(t, out, 0, tabString, newlineString);
+    return symbols_adebug(t, &out, (void*) staticstring_stream, tabString, newlineString);
 }
 
 static int symbols_debug(symbols_t* t) {
