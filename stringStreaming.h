@@ -5,17 +5,51 @@
 #include <sys/param.h>
 #include <string.h>
 
+// All types here are made so that they can be passed as a pair of pointers (base, stream function) and used by a caller who does not know their type.
+
 #define heapstring_remainingoffset 1
 #define heapstring_baseoffset heapstring_remainingoffset + sizeof (uint32_t)
 #define heapstring_basebindoffset heapstring_baseoffset + sizeof (char*)
 
 #define heapstring_minsize sizeof (uint32_t) + sizeof (char*) + sizeof (char**) + 1
 
+#define staticstring_minsize 1 + sizeof (uint32_t)
+
+static int staticstring_init(char** s, uint32_t bufsize) {
+    if (bufsize < staticstring_minsize) {
+        return -1;
+    }
+    memcpy(*s + 1, &bufsize, sizeof bufsize);
+    return 0;
+}
+
+static uint32_t staticstring_getRemaining(char* s) {
+    uint32_t remaining;
+    memcpy(&remaining, s + 1, sizeof remaining);
+    return remaining;
+}
+
+static void staticstring_setRemaining(char* s, uint32_t remaining) {
+    memcpy(s + 1, &remaining, sizeof remaining);
+}
+
 static int staticstring_stream(char** s, char* fmt, ...) {
+    if (*s == NULL) return -1;
     va_list args;
     va_start(args, fmt);
-    int printed = vsprintf(*s, fmt, args);
+    int remaining = staticstring_getRemaining(*s);
+    int printed = vsnprintf(*s, remaining, fmt, args);
+    int potentialRemaining = remaining - printed;
+    if (potentialRemaining < staticstring_minsize) {
+        // decommission the pointer
+        *s = NULL;
+        printed = -1;
+        goto cleanup;
+    }
+    remaining = potentialRemaining;
     *s += printed;
+    staticstring_setRemaining(*s, remaining);
+cleanup:
     va_end(args);
     return printed;
 }
@@ -52,7 +86,7 @@ static void heapstring_bind(char* s, char** b) {
     *b = heapstring_getBase(s);
 }
 
-static char* heapstring_unbind(char* s) {
+static void heapstring_unbind(char* s) {
     memset(s + heapstring_basebindoffset, 0, sizeof (char**));
 }
 

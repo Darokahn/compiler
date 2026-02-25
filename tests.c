@@ -364,7 +364,15 @@ char* test_10(void* od, outfunc of) {
     heapstring_stream(&hstring, bigString);
     heapstring_stream(&hstring, bigString);
     heapstring_stream(&hstring, bigString);
-    of(od, "Wrote many times. No crash; string is:%s\n", hstringbase);
+    char* checkbase;
+    for (int i = 0; i < 6; i++) {
+        checkbase = hstringbase + (sizeof bigString - 1) * i;
+        if (strncmp(checkbase, bigString, sizeof bigString - 1) != 0) {
+            msg = error("string %.*s does not match string %s", checkbase, bigString);
+            goto cleanup;
+        }
+    }
+    of(od, "Wrote many times; all equal; string is:%s\n", hstringbase);
 cleanup:
     free(hstringbase);
     return msg;
@@ -372,5 +380,65 @@ cleanup:
 
 char* test_11(void* od, outfunc of) {
     char* msg = NULL;
+    of(od, "Testing static strings\n");
+    char base[1024];
+    char* s = base;
+    staticstring_init(&s, sizeof base);
+    int remaining = staticstring_getRemaining(s);
+    int expectedRemaining = sizeof base;
+    if (remaining != expectedRemaining) {
+        msg = error("remaining %d does not equal expected %d\n", remaining, expectedRemaining);
+        goto cleanup;
+    }
+    of(od, "remaining %d is correct\n", remaining);
+
+    char* testString = "hello, world!\n";
+
+    staticstring_stream(&s, testString);
+
+    if (strcmp(testString, base) != 0) {
+        msg = error("string %s does not equal %s\n", base, testString);
+        goto cleanup;
+    }
+
+    of(od, "string %s matches its template\n", base);
+
+cleanup:
     return msg;
+}
+
+char* test_12(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing static strings proper behavior when full\n");
+    char testString[] = "hello world";
+
+    char base[sizeof testString];
+
+    char* s = base;
+    staticstring_init(&s, sizeof base);
+
+    staticstring_stream(&s, testString);
+
+    if (s != NULL) {
+        msg = error("stream did not properly destroy string when buffer was full\n");
+        goto cleanup;
+    }
+    of(od, "stream properly destroyed string since its buffer was full\n");
+
+    if (strcmp(base, testString) != 0) {
+        msg = error("string %s does not equal %s\n", base, testString);
+        goto cleanup;
+    }
+    of(od, "string %s properly matches template\n", base);
+
+cleanup:
+    return msg;
+}
+
+char* test_13(void* od, outfunc of) {
+    symbols_t symbols;
+    initSymbols(&symbols);
+    scanAndPrint("stringStreaming.h", &symbols, od, of);
+    symbols_destroy(&symbols);
+    return NULL;
 }

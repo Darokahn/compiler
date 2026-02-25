@@ -8,6 +8,7 @@
 #include "stateMachineDefs.h"
 #include "symbols.h"
 #include "keywords.h"
+#include "stringStreaming.h"
 #define NAMESPACESIZE 4096
 
 struct token {
@@ -48,39 +49,51 @@ static int token_adebug(token_t* t, void* od, outfunc of) {
 }
 
 static int token_sdebug(token_t* t, char* output, int length) {
-    return snprintf(output, length, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
+    char* s = output;
+    staticstring_init(&s, length);
+    return token_adebug(t, s, (void*) staticstring_stream);
 }
 
 static int token_fdebug(token_t* t, FILE* out) {
-    return fprintf(out, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
+    return token_adebug(t, out, (void*) fprintf);
 }
 
 static int token_debug(token_t* t) {
     return token_fdebug(t, stdout);
 }
 
-static int token_debugPrettyPrint(token_t* t) {
-    return printf("(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
-    fflush(stdout);
+static int token_adebugPrettyPrint(token_t* t, void* od, outfunc of) {
+    return of(od, "(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
 }
 
 static int token_sdebugPrettyPrint(token_t* t, char* output, int length) {
-    return snprintf(output, length, "(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
+    char* s = output;
+    staticstring_init(&s, length);
+    return token_adebugPrettyPrint(t, &s, (void*) staticstring_stream);
 }
 
-static int token_prettyPrint(token_t* t) {
-    int printed = printf("%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
-    fflush(stdout);
-    return printed;
+static int token_fdebugPrettyPrint(token_t* t, FILE* out) {
+    return token_adebugPrettyPrint(t, out, (void*) fprintf);
+}
+
+static int token_debugPrettyPrint(token_t* t) {
+    return token_fdebugPrettyPrint(t, stdout);
+}
+
+static int token_aprettyPrint(token_t* t, void* od, outfunc of) {
+    return of(od, "%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
 }
 
 static int token_sprettyPrint(token_t* t, char* output, int length) {
-    return snprintf(output, length, "%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
+    char* s = output;
+    staticstring_init(&s, length);
+    return token_aprettyPrint(t, &s, (void*) staticstring_stream);
 }
 
-static int token_fprettyPrint(token_t* t, char* output, int length) {
-    snprintf(output, length, "%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
+static int token_fprettyPrint(token_t* t, FILE* out) {
+    return token_aprettyPrint(t, out, (void*) fprintf);
 }
+
 static void token_init(token_t* t, char* lexeme, int lexemeLen, int type, symbols_t* symbols) {
     if (type == identifier_token) {
         symbol_t* symbol = symbols_lookup(symbols, lexeme, lexemeLen);
