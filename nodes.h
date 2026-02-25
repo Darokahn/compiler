@@ -30,7 +30,7 @@ struct node {
     }
     static node* node_firstChild(node* n) {
         if (n->firstChild == 0) return NULL;
-        return node_from(n, n->size);
+        return node_from(n, n->firstChild);
     }
     static node* node_nextSibling(node* n) {
         if (n->nextSibling == 0) return NULL;
