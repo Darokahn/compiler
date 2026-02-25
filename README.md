@@ -54,6 +54,9 @@ As of ***right now***, the files in this directory:
 ## symbols.h
 - symbol table that wraps a table backend and uses it to index a dense array. also has a plethora of debug functions.
 
+## nodes.h
+- ***right now***: incomplete definitions for the nodes that will be organized in the parse tree, interpreted, and compiled.
+
 ## stringStreaming.h
 - implementations of string streaming interface. static string, heap string, and line printer.
 
