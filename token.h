@@ -58,10 +58,6 @@ static int token_fdebug(token_t* t, FILE* out) {
     return token_adebug(t, out, (void*) fprintf);
 }
 
-static int token_debug(token_t* t) {
-    return token_fdebug(t, stdout);
-}
-
 static int token_adebugPrettyPrint(token_t* t, void* od, outfunc of) {
     return of(od, "(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
 }
@@ -74,10 +70,6 @@ static int token_sdebugPrettyPrint(token_t* t, char* output, int length) {
 
 static int token_fdebugPrettyPrint(token_t* t, FILE* out) {
     return token_adebugPrettyPrint(t, out, (void*) fprintf);
-}
-
-static int token_debugPrettyPrint(token_t* t) {
-    return token_fdebugPrettyPrint(t, stdout);
 }
 
 static int token_aprettyPrint(token_t* t, void* od, outfunc of) {

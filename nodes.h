@@ -65,7 +65,8 @@ typedef struct {
         if (minimumSize >= b->blockCapacity) {
             b->blockCapacity *= 2;
             b->blockCapacity = MAX(b->blockCapacity, minimumSize);
-            b->base = realloc(b->base, b->blockCapacity);
+            void* newBase = realloc(b->base, b->blockCapacity);
+            b->base = newBase;
             base = (uint8_t*)b->base + size;
         }
         memcpy(base, newNode, newNode->size);

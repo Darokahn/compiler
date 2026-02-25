@@ -25,9 +25,7 @@ void scanAndPrint(char* filename, symbols_t* symbols, void* od, outfunc of) {
     while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
         if (t.type == bad_token) break;
-        char line[1024];
-        token_sprettyPrint(&t, line, sizeof line);
-        of(od, "%s", line);
+        token_aprettyPrint(&t, od, (void*) of);
     }
 }
 
@@ -37,22 +35,18 @@ void scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, outfunc of)
     token_t t;
     t.type = 0;
     of(od, "%-3d", s.lineCount);
-    char line[1024];
     while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
         if (t.type == bad_token) break;
         if (t.type == whitespace_token) {
-            token_sprettyPrint(&t, line, sizeof line);
-            of(od, "%s", line);
+            token_aprettyPrint(&t, od, (void*) of);
         }
         else if (t.type == newline_token) {
-            token_sprettyPrint(&t, line, sizeof line);
-            of(od, "%s", line);
+            token_aprettyPrint(&t, od, (void*) of);
             of(od, "%-3d", s.lineCount);
         }
         else {
-            token_sdebugPrettyPrint(&t, line, sizeof line);
-            of(od, "%s", line);
+            token_adebugPrettyPrint(&t, od, (void*) of);
         }
     }
 }
@@ -441,4 +435,51 @@ char* test_13(void* od, outfunc of) {
     scanAndPrint("stringStreaming.h", &symbols, od, of);
     symbols_destroy(&symbols);
     return NULL;
+}
+
+// just goes and patches the function in memory... it works
+void reallocHeist(void* patch, void* buffer, int size);
+void reallocRestore(void* buffer, int size);
+void* myFunc();
+
+char* test_14(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing heapstring proper behavior when allocation fails\n");
+
+    char* longString = "This string is at least a few words long, but I'm not sure how many. I will be done typing it soon, but not quite yet.";
+
+    char* s;
+    heapstring_init(&s, 32);
+    char* base = heapstring_getBase(s);
+    uint8_t buffer[32];
+    reallocHeist(myFunc, buffer, sizeof buffer);
+    char* attemptMessage = "\nAttempting reallocating operation again\n\n";
+    char* newBase;
+    for (int i = 0; i < 2; i++) {
+        heapstring_stream(&s, "%s%s\n", longString, longString);
+
+        newBase = heapstring_getBase(s);
+
+        if (newBase != base) {
+            msg = error("base has changed from %p to %p despite a failed reallocation\n", base, newBase);
+            goto cleanup;
+        }
+        of(od, "base has correctly not moved\n");
+
+        int remaining = heapstring_getRemaining(s);
+
+        if (remaining != heapstring_minsize) {
+            msg = error("remaining %d does not equal %d\n", remaining, heapstring_minsize);
+            goto cleanup;
+        }
+        of(od, "remaining is correctly %d\n", remaining);
+
+        of(od, attemptMessage);
+        attemptMessage = "";
+    }
+
+cleanup:
+    reallocRestore(buffer, sizeof buffer);
+    free(newBase);
+    return msg;
 }

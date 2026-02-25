@@ -4,23 +4,27 @@
 #include <stdint.h>
 #include <sys/param.h>
 #include <string.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
 
 // All types here are made so that they can be passed as a pair of pointers (base, stream function) and used by a caller who does not know their type.
 
 #define heapstring_remainingoffset 1
-#define heapstring_baseoffset heapstring_remainingoffset + sizeof (uint32_t)
-#define heapstring_basebindoffset heapstring_baseoffset + sizeof (char*)
+#define heapstring_baseoffset (heapstring_remainingoffset + sizeof (uint32_t))
+#define heapstring_basebindoffset (heapstring_baseoffset + sizeof (char*))
 
-#define heapstring_minsize sizeof (uint32_t) + sizeof (char*) + sizeof (char**) + 1
+#define heapstring_minsize (sizeof (uint32_t) + sizeof (char*) + sizeof (char**) + 1)
 
-#define staticstring_minsize 1 + sizeof (uint32_t)
+#define staticstring_minsize (1 + sizeof (uint32_t))
 
-static int staticstring_init(char** s, uint32_t bufsize) {
+static char** staticstring_init(char** s, uint32_t bufsize) {
     if (bufsize < staticstring_minsize) {
-        return -1;
+        return NULL;
     }
     memcpy(*s + 1, &bufsize, sizeof bufsize);
-    return 0;
+    return s;
 }
 
 static uint32_t staticstring_getRemaining(char* s) {
@@ -54,6 +58,7 @@ cleanup:
     return printed;
 }
 
+// put necessary information at proper offsets
 static void heapstring_serialize(char* s, uint32_t remaining, char* base, char** baseBinding) {
     memcpy(s + heapstring_remainingoffset, &remaining, sizeof remaining);
     memcpy(s + heapstring_baseoffset, &base, sizeof base);
@@ -87,17 +92,21 @@ static void heapstring_bind(char* s, char** b) {
 }
 
 static void heapstring_unbind(char* s) {
+    *heapstring_getBaseBinding(s) = NULL;
     memset(s + heapstring_basebindoffset, 0, sizeof (char**));
 }
 
-static int heapstring_init(char** s, uint32_t initialSize) {
+static char** heapstring_init(char** s, uint32_t initialSize) {
     initialSize = MAX(initialSize, heapstring_minsize);
     *s = malloc(initialSize);
+    if (*s == NULL) return NULL;
     heapstring_serialize(*s, initialSize, *s, 0);
+    return s;
 }
 
+// always fully prints the string and returns that number, unless realloc fails
 static int heapstring_stream(char** s, char* fmt, ...) {
-    int remaining = heapstring_getRemaining(*s);
+    uint32_t remaining = heapstring_getRemaining(*s);
     char* base = heapstring_getBase(*s);
     char** baseBind = heapstring_getBaseBinding(*s);
     bool useBinding = baseBind != 0;
@@ -105,36 +114,45 @@ static int heapstring_stream(char** s, char* fmt, ...) {
     int printed;
     int stringSize;
     int potentialRemaining;
-start:
-    va_start(args, fmt);
-    stringSize = vsnprintf(*s, remaining, fmt, args);
-    printed = MIN(remaining, stringSize);
-    potentialRemaining = remaining - printed;
-    if (potentialRemaining < heapstring_minsize) {
-        int currentIndex = *s - base;
-        int capacity = (currentIndex + stringSize + heapstring_minsize) * 2;
-        char* oldBase = base;
-        base = realloc(base, capacity);
-        *s = base + currentIndex;
-        if (useBinding) {
-            // we want to preserve any walking the bound base did, as long as it's validly inside the bounds
-            int walkDistance = *baseBind - oldBase;
-            // if binding breaks its promise to stay in bounds, unbind it
-            if (walkDistance < 0 || walkDistance > currentIndex) {
-                *baseBind = NULL;
-                heapstring_unbind(*s);
-                useBinding = false;
+    while (true) {
+        va_start(args, fmt);
+        stringSize = vsnprintf(*s, remaining, fmt, args);
+        printed = MIN(remaining, stringSize);
+        potentialRemaining = remaining - printed;
+        if (potentialRemaining < heapstring_minsize) {
+            ptrdiff_t currentIndex = *s - base;
+            uint32_t capacity = (currentIndex + stringSize + heapstring_minsize) * 2;
+            char* oldBase = base;
+            base = realloc(base, capacity);
+            if (base == NULL) {
+                base = oldBase;
+                potentialRemaining = heapstring_minsize;
+                printed = remaining - heapstring_minsize;
+                goto cleanup;
             }
-            *baseBind = base + walkDistance;
+            *s = base + currentIndex;
+            if (useBinding) {
+                // we want to preserve any walking the bound base did, as long as it's validly inside the bounds
+                ptrdiff_t walkDistance = *baseBind - oldBase;
+                // if binding breaks its promise to stay in bounds, unbind it
+                if (walkDistance < 0 || walkDistance > currentIndex) {
+                    *baseBind = NULL;
+                    heapstring_unbind(*s);
+                    useBinding = false;
+                }
+                *baseBind = base + walkDistance;
+            }
+            remaining = capacity - currentIndex;
+            va_end(args);
         }
-        remaining = capacity - currentIndex;
-        va_end(args);
-        goto start;
+        else break;
     }
+cleanup:
     va_end(args);
     *s += printed;
     remaining = potentialRemaining;
     heapstring_serialize(*s, remaining, base, baseBind);
+    return printed;
 }
 
 typedef int (*outfunc)(void*, char*, ...);
@@ -146,10 +164,10 @@ struct linePrinter {
     int newlineLen;
     char* indent;
     int indentLen;
-    void* outDevice;
-    void (*outFn)(linePrinter*, char*, int);
+    void* od;
+    outfunc of;
 };
-    static void linePrinter_print(linePrinter* t, char* fmt, ...) {
+    static void linePrinter_stream(linePrinter* t, char* fmt, ...) {
         va_list args;
         va_start(args, fmt);
         char* allocated = NULL;
@@ -169,37 +187,27 @@ struct linePrinter {
                 proxyLen = t->indentLen;
             }
             else continue;
-            t->outFn(t, allocated + baseIndex, (i - baseIndex));
+            t->of(t->od, "%.*s", (i - baseIndex), allocated + baseIndex);
             int iterations = t->tabCount;
-            t->outFn(t, proxy, proxyLen);
+            t->of(t->od, "%.*s", proxyLen, proxy);
             if (newline) {
-                for (int i = 0; i < iterations; i++) {
-                    t->outFn(t, t->indent, t->indentLen);
+                for (int j = 0; j < iterations; j++) {
+                    t->of(t->od, "%.*s", t->indentLen, t->indent);
                 }
             }
             baseIndex = i + 1;
         }
-        t->outFn(t, allocated + baseIndex, len - baseIndex);
-cleanup:
+        t->of(t->od, "%.*s", len - baseIndex, allocated + baseIndex);
         free(allocated);
     }
-    static void linePrinter_outString(linePrinter* t, char* s, int n) {
-        char* outDevice = (char*) t->outDevice;
-        int printed = snprintf(outDevice, n, "%s", s);
-        outDevice += printed;
-        t->outDevice = outDevice;
-    }
-    static void linePrinter_outFile(linePrinter* t, char* s, int n) {
-        FILE* outDevice = (FILE*) t->outDevice;
-        fprintf(outDevice, "%.*s", n, s);
-    }
-    static linePrinter* linePrinter_init(linePrinter* t, char* newline, char* tabstr, void* outDevice, void* outFn) {
+    static linePrinter* linePrinter_init(linePrinter* t, char* newline, char* tabstr, void* od, outfunc of) {
         t->newline = newline;
         t->newlineLen = strlen(newline);
         t->indent = tabstr;
         t->indentLen = strlen(tabstr);
         t->tabCount = 0;
-        t->outDevice = outDevice;
-        t->outFn = outFn;
+        t->od = od;
+        t->of = of;
+        return t;
     }
 

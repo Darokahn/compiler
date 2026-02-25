@@ -24,7 +24,7 @@ int main() {
     int total = 0;
 
     linePrinter printer;
-    linePrinter_init(&printer, "\n", "    ", stdout, linePrinter_outFile);
+    linePrinter_init(&printer, "\n", "    ", stdout, (void*)fprintf);
     printer.tabCount = 3;
 
     for (int i = 0; true; i++) {
@@ -38,8 +38,9 @@ int main() {
 
         printf("\n" CLR_BOLD "--- RUNNING: %s ---" CLR_RESET "", symName);
         
-        linePrinter_print(&printer, "\n");
-        heapString result = test(&printer, (void*)linePrinter_print);
+        linePrinter_stream(&printer, "\n");
+        heapString result = test(&printer, (void*)linePrinter_stream);
+        //heapString result = test(stdout, (void*)fprintf);
         fflush(stdout);
 
         if (result != NULL) {
