@@ -8,7 +8,7 @@
 #include "stateMachineDefs.h"
 #include "symbols.h"
 #include "keywords.h"
-#include "stringStreaming.h"
+#include "stringStreaming/stringStreaming.h"
 #define NAMESPACESIZE 4096
 
 struct token {

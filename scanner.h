@@ -21,12 +21,11 @@ typedef struct {
     int lineCount;
 } scanner_t;
 
-static void scanner_init(scanner_t* s, char* filename, symbols_t* symbols) {
+static int scanner_init(scanner_t* s, char* filename, symbols_t* symbols) {
+    errno = 0;
     int fd = open(filename, O_RDONLY);
     if (fd < 0) {
-        fprintf(stderr, "open %s failed: ", filename);
-        perror("");
-        exit(errno);
+        return errno;
     }
     struct stat stat;
     fstat(fd, &stat);
@@ -44,6 +43,7 @@ static void scanner_init(scanner_t* s, char* filename, symbols_t* symbols) {
     s->length = stat.st_size;
     s->lineCount = 1;
     s->symbols = symbols;
+    return 0;
 }
 
 static int scanner_getc(scanner_t* s) {

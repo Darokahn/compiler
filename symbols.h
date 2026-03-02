@@ -7,7 +7,7 @@
 
 #include "keywords.h"
 #include "table/table.h"
-#include "stringStreaming.h"
+#include "stringStreaming/stringStreaming.h"
 
 enum symbolType {
     variable_symbol,

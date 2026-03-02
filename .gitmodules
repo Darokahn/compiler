@@ -1,3 +1,6 @@
 [submodule "table"]
 	path = table
 	url = git@github.com:Darokahn/table
+[submodule "stringStreaming"]
+	path = stringStreaming
+	url = git@github.com:Darokahn/stringStreaming

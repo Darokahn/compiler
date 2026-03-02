@@ -6,7 +6,7 @@
 #include "scanner.h"
 #include "symbols.h"
 #include "nodes.h"
-#include "stringStreaming.h"
+#include "stringStreaming/stringStreaming.h"
 
 char* error(const char* fmt, ...) {
     va_list args;
@@ -17,23 +17,26 @@ char* error(const char* fmt, ...) {
     return newError;
 }
 
-void scanAndPrint(char* filename, symbols_t* symbols, void* od, outfunc of) {
+int scanAndPrint(char* filename, symbols_t* symbols, void* od, outfunc of) {
     scanner_t s;
-    scanner_init(&s, filename, symbols);
+    int err = scanner_init(&s, filename, symbols);
+    if (err != 0) return err;
     token_t t;
-    t.type = 0;
+    t.type = ~eof_token; // just some value that does not equal it
     while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
         if (t.type == bad_token) break;
         token_aprettyPrint(&t, od, (void*) of);
     }
+    return 0;
 }
 
-void scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, outfunc of) {
+int scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, outfunc of) {
     scanner_t s;
-    scanner_init(&s, filename, symbols);
+    int err = scanner_init(&s, filename, symbols);
+    if (err != 0) return err;
     token_t t;
-    t.type = 0;
+    t.type = ~eof_token;
     of(od, "%-3d", s.lineCount);
     while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
@@ -430,11 +433,17 @@ cleanup:
 }
 
 char* test_13(void* od, outfunc of) {
+    char* msg = NULL;
     symbols_t symbols;
     initSymbols(&symbols);
-    scanAndPrint("stringStreaming.h", &symbols, od, of);
+    int err = scanAndPrint("stringStreaming/stringStreaming.h", &symbols, od, of);
+    if (err != 0) {
+        msg = error("%s", strerror(err));
+        goto cleanup;
+    }
+cleanup:
     symbols_destroy(&symbols);
-    return NULL;
+    return msg;
 }
 
 // just goes and patches the function in memory... it works

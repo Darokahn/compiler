@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "stringStreaming.h"
+#include "stringStreaming/stringStreaming.h"
 
 #define CLR_RESET  "\x1b[0m"
 #define CLR_RED    "\x1b[31m"

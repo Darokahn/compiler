@@ -28,3 +28,4 @@ void reallocRestore(void* buffer, int size) {
     ptr = ptr & ~(pagesize - 1);
     mprotect((void*) ptr, pagesize, PROT_READ | PROT_EXEC);
 }
+
