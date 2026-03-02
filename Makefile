@@ -5,4 +5,4 @@ all: main.c table/table.c dfa_gen/cGenerator.py dfa_gen/flowGenerator.py
 	gcc -rdynamic main.c table/table.c evilpatch.c tests.c -g -fsanitize=address
 
 c: main.c table/table.c
-	gcc -rdynamic main.c table/table.c evilpatch.c tests.c -g -fsanitize=address
+	gcc -rdynamic main.c table/table.c evilpatch.c tests.c -g
