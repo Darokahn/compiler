@@ -7,6 +7,7 @@
 #include "symbols.h"
 #include "nodes.h"
 #include "stringStreaming.h"
+#include "nodeStreaming.h"
 
 char* error(const char* fmt, ...) {
     va_list args;
@@ -481,5 +482,193 @@ char* test_14(void* od, outfunc of) {
 cleanup:
     reallocRestore(buffer, sizeof buffer);
     free(newBase);
+    return msg;
+}
+
+char* test_15(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing deep parse tree: (x * y) + (z - 10)\n");
+
+    nodeBase b;
+    nodeBase_init(&b, 1); // Start small to force reallocs
+
+    symbols_t symbols;
+    initSymbols(&symbols);
+
+    // 1. Setup Symbols
+    int xVal = 10, yVal = 5, zVal = 100;
+    symbol_t symX = { .name = "x", .nameLen = 1, .type = variable_symbol, .v.value = xVal };
+    symbol_t symY = { .name = "y", .nameLen = 1, .type = variable_symbol, .v.value = yVal };
+    symbol_t symZ = { .name = "z", .nameLen = 1, .type = variable_symbol, .v.value = zVal };
+    
+    symbols_add(&symbols, symX.name, symX.nameLen, symX);
+    symbols_add(&symbols, symY.name, symY.nameLen, symY);
+    symbols_add(&symbols, symZ.name, symZ.nameLen, symZ);
+
+    // 2. Define Operators
+    plusOperatorNode plus;   plusOperatorNode_init(&plus);
+    timesOperatorNode times; timesOperatorNode_init(&times);
+    minusOperatorNode minus; minusOperatorNode_init(&minus);
+
+    // 3. Build the Tree
+    // Root: [+]
+    int plusIdx = nodeBase_addChild(&b, 0, (node*)&plus); // Adding to root index 0
+
+    // Left Side: [*]
+    int timesIdx = nodeBase_addChild(&b, plusIdx, (node*)&times);
+    
+    // Children of [*]: x , y
+    identifierNode iNode;
+    identifierNode_init(&iNode, "x", 1, &symbols);
+    nodeBase_addChild(&b, timesIdx, (node*)&iNode);
+    
+    identifierNode_init(&iNode, "y", 1, &symbols);
+    nodeBase_addChild(&b, timesIdx, (node*)&iNode);
+
+    // Right Side: [-]
+    int minusIdx = nodeBase_addChild(&b, plusIdx, (node*)&minus);
+
+    // Children of [-]: z , 10
+    identifierNode_init(&iNode, "z", 1, &symbols);
+    nodeBase_addChild(&b, minusIdx, (node*)&iNode);
+
+    integerNode tenNode;
+    integerNode_init(&tenNode, 10);
+    nodeBase_addChild(&b, minusIdx, (node*)&tenNode);
+
+    // 4. Evaluate
+    // Note: We use the index returned by the first nodeBase_add (the root)
+    expressionNode* root = (expressionNode*) node_from(b.base, plusIdx);
+    
+    int expected = (xVal * yVal) + (zVal - 10); // (10 * 5) + (100 - 10) = 140
+    int result = root->eval(root);
+
+    if (result != expected) {
+        // Assuming your 'error' helper formats a heap string for the harness
+        msg = error("Deep Eval Failed: Expected %d, got %d", expected, result);
+        goto cleanup;
+    }
+
+    of(od, "Deep expression (x*y)+(z-10) evaluated to %d successfully\n", result);
+
+cleanup:
+    symbols_destroy(&symbols);
+    nodeBase_destroy(&b);
+    return msg;
+}
+
+char* test_16(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing logic gauntlet: ((x << 2) | (y >> 1)) >= (z %% 7) && (x + y == 15)\n");
+
+    nodeBase b;
+    nodeBase_init(&b, 1);
+
+    symbols_t symbols;
+    initSymbols(&symbols);
+
+    // 1. Setup Symbols
+    int xVal = 10, yVal = 5, zVal = 100;
+    symbol_t symX = { .name = "x", .nameLen = 1, .type = variable_symbol, .v.value = xVal };
+    symbol_t symY = { .name = "y", .nameLen = 1, .type = variable_symbol, .v.value = yVal };
+    symbol_t symZ = { .name = "z", .nameLen = 1, .type = variable_symbol, .v.value = zVal };
+    
+    symbols_add(&symbols, symX.name, symX.nameLen, symX);
+    symbols_add(&symbols, symY.name, symY.nameLen, symY);
+    symbols_add(&symbols, symZ.name, symZ.nameLen, symZ);
+
+    // 2. Initialize Operator Nodes
+    andOperatorNode andNode;           andOperatorNode_init(&andNode);
+    geOperatorNode geNode;             geOperatorNode_init(&geNode);
+    bitwiseOrOperatorNode orNode;      bitwiseOrOperatorNode_init(&orNode);
+    shlOperatorNode shlNode;           shlOperatorNode_init(&shlNode);
+    shrOperatorNode shrNode;           shrOperatorNode_init(&shrNode);
+    modOperatorNode modNode;           modOperatorNode_init(&modNode);
+    eqOperatorNode eqNode;             eqOperatorNode_init(&eqNode);
+    plusOperatorNode plusNode;         plusOperatorNode_init(&plusNode);
+
+    // 3. Build the Tree: ((x << 2) | (y >> 1)) >= (z % 7) && (x + y == 15)
+    
+    // Root: &&
+    int andIdx = nodeBase_addChild(&b, 0, (node*)&andNode);
+
+    // Left child of &&: >=
+    int geIdx = nodeBase_addChild(&b, andIdx, (node*)&geNode);
+
+    // Left child of >=: |
+    int orIdx = nodeBase_addChild(&b, geIdx, (node*)&orNode);
+    
+    // Left of |: <<
+    int shlIdx = nodeBase_addChild(&b, orIdx, (node*)&shlNode);
+    identifierNode iNode;
+    identifierNode_init(&iNode, "x", 1, &symbols);
+    nodeBase_addChild(&b, shlIdx, (node*)&iNode);
+    integerNode valNode;
+    integerNode_init(&valNode, 2);
+    nodeBase_addChild(&b, shlIdx, (node*)&valNode);
+
+    // Right of |: >>
+    int shrIdx = nodeBase_addChild(&b, orIdx, (node*)&shrNode);
+    identifierNode_init(&iNode, "y", 1, &symbols);
+    nodeBase_addChild(&b, shrIdx, (node*)&iNode);
+    integerNode_init(&valNode, 1);
+    nodeBase_addChild(&b, shrIdx, (node*)&valNode);
+
+    // Right child of >=: %
+    int modIdx = nodeBase_addChild(&b, geIdx, (node*)&modNode);
+    identifierNode_init(&iNode, "z", 1, &symbols);
+    nodeBase_addChild(&b, modIdx, (node*)&iNode);
+    integerNode_init(&valNode, 7);
+    nodeBase_addChild(&b, modIdx, (node*)&valNode);
+
+    // Right child of &&: ==
+    int eqIdx = nodeBase_addChild(&b, andIdx, (node*)&eqNode);
+    
+    // Left of ==: +
+    int plusIdx = nodeBase_addChild(&b, eqIdx, (node*)&plusNode);
+    identifierNode_init(&iNode, "x", 1, &symbols);
+    nodeBase_addChild(&b, plusIdx, (node*)&iNode);
+    identifierNode_init(&iNode, "y", 1, &symbols);
+    nodeBase_addChild(&b, plusIdx, (node*)&iNode);
+
+    // Right of ==: 15
+    integerNode_init(&valNode, 15);
+    nodeBase_addChild(&b, eqIdx, (node*)&valNode);
+
+    // 4. Evaluation
+    expressionNode* root = (expressionNode*) node_from(b.base, andIdx);
+    
+    // Math Check:
+    // ((10 << 2) | (5 >> 1)) >= (100 % 7) && (10 + 5 == 15)
+    // ((40) | (2)) >= (2) && (15 == 15)
+    // 42 >= 2 && 1
+    // 1 && 1 => 1
+    int expected = 1; 
+    int result = root->eval(root);
+
+    if (result != expected) {
+        msg = error("Gauntlet Failed: Expected %d, got %d", expected, result);
+        goto cleanup;
+    }
+
+    of(od, "Logic gauntlet passed: result is %d\n", result);
+
+cleanup:
+    symbols_destroy(&symbols);
+    nodeBase_destroy(&b);
+    return msg;
+}
+
+char* test_17(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing node initialization via streaming\n");
+    nodeBase b;
+    nodeBase_init(&b, 1);
+    nodeBaseCursor c;
+    nodeBaseCursor_init(&c, &b);
+
+cleanup:
+    nodeBase_destroy(&b);
+    nodeBaseCursor_destroy(&c);
     return msg;
 }

@@ -25,13 +25,15 @@ static void stateMachine_init(stateMachine_t* t) {
     t->state = start_state;
 }
 
-static int stateMachine_getToken(void* textCursor, void* f0, enum tokenType* lastTokenType) {
+static int stateMachine_getToken(void* textCursor, void* f0, enum tokenType* lastTokenType
+) {
     int (*getChar)(void*) = f0;
     stateMachine_t stateMachine;
     stateMachine_init(&stateMachine);
     int lexemeLen = 0;
     enum state currentState;
     int c;
+
     do {
         c = getChar(textCursor);
         lexemeLen++;

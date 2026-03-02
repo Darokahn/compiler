@@ -14,6 +14,15 @@
 #define CLR_CYAN   "\x1b[36m"
 #define CLR_BOLD   "\x1b[1m"
 
+int splitstream(FILE* pointerPair[2], char* fmt, ...) {
+    va_list args0;
+    va_start(args0, fmt);
+    va_list args1;
+    va_copy(args1, args0);
+    vfprintf(pointerPair[0], fmt, args0);
+    vfprintf(pointerPair[1], fmt, args1);
+}
+
 
 typedef char* heapString;
 

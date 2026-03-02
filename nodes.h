@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/param.h>
+#include <stdalign.h>
 
 #define maxalign(ptr) (void*)((intptr_t)(((uint8_t*)ptr) + (__alignof (max_align_t) - 1)) & (~(__alignof (max_align_t) - 1 )))
 
@@ -17,10 +18,11 @@ typedef max_align_t align;
 typedef struct node node;
 
 struct node {
-    int size;
-    int lastChild;
-    int firstChild;
-    int nextSibling;
+    uint32_t size;
+    uint32_t lastChild;
+    uint32_t firstChild;
+    uint32_t nextSibling;
+    uint32_t parent; // implicitly negative
 };
     static node* node_from(node* n, int offset) {
         return (node*) ((uint8_t*) n + offset);
@@ -36,11 +38,12 @@ struct node {
         if (n->nextSibling == 0) return NULL;
         return node_from(n, n->nextSibling);
     }
-    static void node_init(node*n, int size) {
+    static void node_init(node* n, int size) {
         n->size = size;
         n->nextSibling = 0;
         n->lastChild = 0;
         n->firstChild = 0;
+        n->parent = 0;
     }
 
 
@@ -85,6 +88,7 @@ typedef struct {
         node* lastChild = node_from(parent, parent->lastChild);
         lastChild->nextSibling = node_between(lastChild, newNode);
         parent->lastChild = node_between(parent, newNode);
+        newNode->parent = parent->lastChild; // looks odd, but their offset to one another is equal, and the `parent field` is implicitly negative
         return node_between(b->base, newNode);
     }
 
@@ -94,36 +98,44 @@ typedef struct {
         }
     }
 
+#define init(nodename) nodename* nodename##_init(nodename* n) {node_init((node*) n, sizeof n);}
+
 typedef struct startNode {
     node node;
     align program[];
 } startNode;
+    init(startNode);
 
 typedef struct programNode {
     node node;
     align block[];
 } programNode;
+    init(programNode);
 
 typedef struct blockNode {
     node node;
     align statementGroup[];
 } blockNode;
+    init(blockNode);
 
 typedef struct statementGroupNode {
     node node;
     int lastStatement;
     align statements[];
 } statementGroupNode;
+    init(statementGroupNode);
 
 typedef struct statementNode {
     node node;
     int next;
 } statementNode;
+    init(statementNode);
 
 typedef struct declarationStatementNode {
     statementNode node;
     align identifier[];
 } declarationStatementNode;
+    init(declarationStatementNode);
 
 typedef int (*evalFunc)(void*);
 
@@ -171,6 +183,14 @@ typedef struct identifierNode {
 
     static int identifierNode_getIndex(identifierNode* n) {
         return 0;
+    }
+
+    static void identifierNode_declare(identifierNode* n) {
+        symbols_add(n->symbols, n->lexeme, n->lexemeLen, (symbol_t){.type=variable_symbol});
+    }
+
+    static void identifierNode_setValue(identifierNode* n, int v) {
+        symbols_lookup(n->symbols, n->lexeme, n->lexemeLen)->v.value = v;
     }
 
     static void identifierNode_init(identifierNode* n, char* lexeme, int lexemeLen, symbols_t* symbols) {
