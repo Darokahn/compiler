@@ -151,7 +151,8 @@ char* test_4(void* od, outfunc of) {
     of(od, "Testing parse tree resize\n");
     nodeBase b;
     nodeBase_init(&b, 1);
-    node n = {.size = sizeof n};
+    node n;
+    node_init(&n, &node_defaultVtable);
     nodeBase_add(&b, &n);
     nodeBase_add(&b, &n);
     nodeBase_add(&b, &n);
@@ -170,17 +171,16 @@ char* test_5(void* od, outfunc of) {
     timesOperatorNode_init(&times);
     plusOperatorNode plus;
     plusOperatorNode_init(&plus);
-    nodeBase_add(&b, (node*)&times);
-    int timesIndex = 0;
-    int plusIndex = nodeBase_addChild(&b, timesIndex, (node*)&plus);
+    int rootIndex = nodeBase_add(&b, (node*)&times);
+    int plusIndex = nodeBase_addChild(&b, rootIndex, (node*)&plus);
     integerNode i;
     integerNode_init(&i, 5);
     nodeBase_addChild(&b, plusIndex, (node*)&i);
     integerNode_init(&i, 10);
     nodeBase_addChild(&b, plusIndex, (node*)&i);
-    nodeBase_addChild(&b, timesIndex, (node*)&i);
-    expressionNode* n = (expressionNode*) node_from(b.base, 0);
-    int result = n->eval(n);
+    nodeBase_addChild(&b, rootIndex, (node*)&i);
+    expressionNode* n = (expressionNode*) node_from(b.base, rootIndex);
+    int result = expressionNode_eval(n);
     if (result != 150) {
         msg = error("result %d is not 150\n", result);
         goto cleanup;
@@ -214,9 +214,9 @@ char* test_6(void* od, outfunc of) {
 
     identifierNode i;
     identifierNode_init(&i, "x", 1, &symbols);
-    nodeBase_add(&b, (node*)&i);
-    expressionNode* n = (expressionNode*) node_from(b.base, 0);
-    int result = n->eval(n);
+    int rootIndex = nodeBase_add(&b, (node*)&i);
+    expressionNode* n = (expressionNode*) node_from(b.base, rootIndex);
+    int result = expressionNode_eval(n);
     if (result != symbolValue) {
         msg = error("result %d is not %d\n", result, symbolValue);
         goto cleanup;
@@ -262,22 +262,20 @@ char* test_7(void* od, outfunc of) {
     plusOperatorNode p;
     plusOperatorNode_init(&p);
 
-    nodeBase_add(&b, (node*)&p);
-
-    int plusIndex = 0;
+    int rootIndex = nodeBase_add(&b, (node*)&p);
 
     identifierNode i;
     identifierNode_init(&i, x.name, x.nameLen, &symbols);
 
-    nodeBase_addChild(&b, plusIndex, (node*)&i);
+    nodeBase_addChild(&b, rootIndex, (node*)&i);
 
     identifierNode_init(&i, y.name, y.nameLen, &symbols);
-    nodeBase_addChild(&b, plusIndex, (node*)&i);
+    nodeBase_addChild(&b, rootIndex, (node*)&i);
 
-    expressionNode* n = (expressionNode*) node_from(b.base, 0);
+    expressionNode* n = (expressionNode*) node_from(b.base, rootIndex);
     int expectedResult = y.v.value + x.v.value;
 
-    int result = n->eval(n);
+    int result = expressionNode_eval(n);
 
     if (result != expectedResult) {
         msg = error("result %d is not %d\n", result, expectedResult);
@@ -550,7 +548,7 @@ char* test_15(void* od, outfunc of) {
     expressionNode* root = (expressionNode*) node_from(b.base, plusIdx);
     
     int expected = (xVal * yVal) + (zVal - 10); // (10 * 5) + (100 - 10) = 140
-    int result = root->eval(root);
+    int result = expressionNode_eval(root);
 
     if (result != expected) {
         // Assuming your 'error' helper formats a heap string for the harness
@@ -559,6 +557,8 @@ char* test_15(void* od, outfunc of) {
     }
 
     of(od, "Deep expression (x*y)+(z-10) evaluated to %d successfully\n", result);
+
+    node_print(b.base, od, of);
 
 cleanup:
     symbols_destroy(&symbols);
@@ -653,7 +653,7 @@ char* test_16(void* od, outfunc of) {
     // 42 >= 2 && 1
     // 1 && 1 => 1
     int expected = 1; 
-    int result = root->eval(root);
+    int result = expressionNode_eval(root);
 
     if (result != expected) {
         msg = error("Gauntlet Failed: Expected %d, got %d", expected, result);
@@ -670,14 +670,160 @@ cleanup:
 
 char* test_17(void* od, outfunc of) {
     char* msg = NULL;
-    of(od, "Testing node initialization via streaming\n");
+    of(od, "Testing node initialization via manual commands\n");
+    nodeBase b;
+    nodeBase_init(&b, 1);
+    nodeBaseCursor c;
+    nodeBaseCursor_init(&c, &b);
+    nodeBaseCursor_setInitFunc(&c, "plus", 4);
+    nodeBaseCursor_initNode(&c);
+    nodeBaseCursor_advance(&c);
+    nodeBaseCursor_setInitFunc(&c, "integer", 7);
+    nodeBaseCursor_addArg(&c, erase 16);
+    c.currentFuncSchema += 2;
+    nodeBaseCursor_initNode(&c);
+    nodeBaseCursor_advance(&c);
+    nodeBaseCursor_setCursorDirection(&c, cursor_sibling);
+    nodeBaseCursor_setInitFunc(&c, "integer", 7);
+    nodeBaseCursor_addArg(&c, erase 9);
+    c.currentFuncSchema += 2;
+    nodeBaseCursor_initNode(&c);
+
+    expressionNode* root = (expressionNode*) nodeBase_getRoot(c.base);
+
+    int result = expressionNode_eval(root);
+    int expected = 25;
+
+    if (result != expected) {
+        msg = error("expected %d, got %d", expected, result);
+        goto cleanup;
+    }
+    of(od, "%d correct\n", result);
+
+    node_print(b.base, od, of);
+
+cleanup:
+    nodeBase_destroy(&b);
+    nodeBaseCursor_destroy(&c);
+    return msg;
+}
+
+char* test_18(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing node initialization via string streaming\n");
     nodeBase b;
     nodeBase_init(&b, 1);
     nodeBaseCursor c;
     nodeBaseCursor_init(&c, &b);
 
+    char template[] = "plus > integer(16), integer(9);";
+
+    int charsScanned = nodeBaseCursor_addNodeStream(&c, template);
+
+    if (charsScanned != sizeof template - 1) {
+        msg = error("scan only succeeded up to %.*s; expected full scan", charsScanned, template);
+        goto cleanup;
+    }
+
+    of(od, "successfully scanned\n");
+
+    expressionNode* root = (expressionNode*) nodeBase_getRoot(c.base);
+    node_print(b.base, od, of);
+    of(od, "\n");
+
+    int result = expressionNode_eval(root);
+    int expected = 25;
+
+    if (result != expected) {
+        msg = error("expected %d, got %d", expected, result);
+        goto cleanup;
+    }
+    of(od, "%d correct\n", result);
+
 cleanup:
     nodeBase_destroy(&b);
+    nodeBaseCursor_destroy(&c);
+    return msg;
+}
+
+char* test_19(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing complicated node initialization via string streaming\n");
+    nodeBase b;
+    nodeBase_init(&b, 1);
+    nodeBaseCursor c;
+    nodeBaseCursor_init(&c, &b);
+
+    char template[] = "plus > (times > (integer(3), integer(7)), integer(4))";
+
+    int charsScanned = nodeBaseCursor_addNodeStream(&c, template);
+
+    if (charsScanned != sizeof template - 1) {
+        msg = error("scan only succeeded up to %.*s (%d characters); expected full scan", charsScanned, template, charsScanned);
+        goto cleanup;
+    }
+
+    of(od, "successfully scanned\n");
+
+    node_print(b.base, od, of);
+
+    expressionNode* root = (expressionNode*) nodeBase_getRoot(&b);
+
+    int result = expressionNode_eval(root);
+    int expected = 25;
+
+    if (result != expected) {
+        msg = error("expected %d, got %d", expected, result);
+        goto cleanup;
+    }
+    of(od, "%d correct\n", result);
+
+cleanup:
+    nodeBase_destroy(&b);
+    nodeBaseCursor_destroy(&c);
+    return msg;
+}
+
+char* test_20(void* od, outfunc of) {
+    char* msg = NULL;
+    of(od, "Testing identifier node initialization via string streaming\n");
+    nodeBase b;
+    nodeBase_init(&b, 1);
+    nodeBaseCursor c;
+    nodeBaseCursor_init(&c, &b);
+
+    symbols_t symbols;
+    symbols_init(&symbols, 1);
+
+    symbols_add(&symbols, "hi", 2, (symbol_t) {.v.value=16});
+
+    char template[] = "identifier('hi', %p)";
+
+    int charsScanned = nodeBaseCursor_addNodeStream(&c, template, &symbols);
+
+    if (charsScanned != sizeof template - 1) {
+        msg = error("scan only succeeded up to %.*s (%d characters); expected full scan", charsScanned, template, charsScanned);
+        goto cleanup;
+    }
+
+    of(od, "successfully scanned\n");
+
+    node_print(b.base, od, of);
+
+    expressionNode* root = (expressionNode*) nodeBase_getRoot(&b);
+
+    int result = expressionNode_eval(root);
+    int expected = 16;
+
+    if (result != expected) {
+        msg = error("expected %d, got %d", expected, result);
+        goto cleanup;
+    }
+    of(od, "%d correct\n", result);
+
+cleanup:
+    nodeBase_destroy(&b);
+    symbols_destroy(&symbols);
     nodeBaseCursor_destroy(&c);
     return msg;
 }
