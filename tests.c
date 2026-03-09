@@ -7,7 +7,7 @@
 #include "symbols.h"
 #include "nodes.h"
 #include "nodeStreaming.h"
-#include "stringStreaming/stringStreaming.h"
+#include "stringStreaming/stringstream.h"
 
 char* error(const char* fmt, ...) {
     va_list args;
@@ -18,7 +18,7 @@ char* error(const char* fmt, ...) {
     return newError;
 }
 
-int scanAndPrint(char* filename, symbols_t* symbols, void* od, outfunc of) {
+int scanAndPrint(char* filename, symbols_t* symbols, void* od, aprintf of) {
     scanner_t s;
     int err = scanner_init(&s, filename, symbols);
     if (err != 0) return err;
@@ -32,7 +32,7 @@ int scanAndPrint(char* filename, symbols_t* symbols, void* od, outfunc of) {
     return 0;
 }
 
-int scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, outfunc of) {
+int scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, aprintf of) {
     scanner_t s;
     int err = scanner_init(&s, filename, symbols);
     if (err != 0) return err;
@@ -53,6 +53,7 @@ int scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, outfunc of) 
             token_adebugPrettyPrint(&t, od, (void*) of);
         }
     }
+    return 0;
 }
 
 void initSymbols(symbols_t* t) {
@@ -71,7 +72,7 @@ void initSymbols(symbols_t* t) {
     }
 }
 
-char* test_0(void* od, outfunc of) {
+char* test_0(void* od, aprintf of) {
     char* msg = NULL;
     symbols_t symbols;
     initSymbols(&symbols);
@@ -86,7 +87,7 @@ cleanup:
     return msg;
 }
 
-char* test_1(void* od, outfunc of) {
+char* test_1(void* od, aprintf of) {
     symbols_t symbols;
     initSymbols(&symbols);
     scanAndPrint("main.c", &symbols, od, of);
@@ -94,10 +95,11 @@ char* test_1(void* od, outfunc of) {
     return NULL;
 }
 
-char* test_2(void* od, outfunc of) {
+char* test_2(void* od, aprintf of) {
     symbols_t symbols;
     initSymbols(&symbols);
     scanAndPrintDebug("testfiles/test.c", &symbols, od, of);
+    of(od, "\n");
     symbols_destroy(&symbols);
     return NULL;
 }
@@ -115,7 +117,7 @@ int tc_getChar(textCursor* c) {
     return ch;
 }
 
-char* test_3(void* od, outfunc of) {
+char* test_3(void* od, aprintf of) {
     char* msg = NULL;
     char lex[] = "while + 3";
     textCursor c = {lex, lex + sizeof lex - 1};
@@ -147,7 +149,7 @@ cleanup:
     return msg;
 }
 
-char* test_4(void* od, outfunc of) {
+char* test_4(void* od, aprintf of) {
     of(od, "Testing parse tree resize\n");
     nodeBase b;
     nodeBase_init(&b, 1);
@@ -161,7 +163,7 @@ char* test_4(void* od, outfunc of) {
     return NULL;
 }
 
-char* test_5(void* od, outfunc of) {
+char* test_5(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing parse tree with the expression '(5 + 10) * 10' manually inserted\n");
     nodeBase b;
@@ -191,7 +193,7 @@ cleanup:
     return msg;
 }
 
-char* test_6(void* od, outfunc of) {
+char* test_6(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing parse tree with only one identifier\n");
 
@@ -207,7 +209,7 @@ char* test_6(void* od, outfunc of) {
         .name = "x",
         .nameLen = 1,
         .type = variable_symbol,
-        .v = symbolValue,
+        .v.value = symbolValue,
     };
 
     symbols_add(&symbols, "x", 1, x);
@@ -228,7 +230,7 @@ cleanup:
     return msg;
 }
 
-char* test_7(void* od, outfunc of) {
+char* test_7(void* od, aprintf of) {
     char* msg = NULL;
 
     of(od, "Testing parse tree with an addition between two identifiers\n");
@@ -246,14 +248,14 @@ char* test_7(void* od, outfunc of) {
         .name = "x",
         .nameLen = 1,
         .type = variable_symbol,
-        .v = xValue,
+        .v.value = xValue,
     };
 
     symbol_t y = {
         .name = "y",
         .nameLen = 1,
         .type = variable_symbol,
-        .v = yValue,
+        .v.value = yValue,
     };
 
     symbols_add(&symbols, x.name, x.nameLen, x);
@@ -289,7 +291,7 @@ cleanup:
     return msg;
 }
 
-char* test_8(void* od, outfunc of) {
+char* test_8(void* od, aprintf of) {
     char* msg = NULL;
     char* hstring;
     of(od, "Testing heapstring initialization\n");
@@ -312,7 +314,7 @@ cleanup:
     return msg;
 }
 
-char* test_9(void* od, outfunc of) {
+char* test_9(void* od, aprintf of) {
     char* msg = NULL;
     char* hstring;
     of(od, "Testing heapstring streaming\n");
@@ -336,7 +338,7 @@ cleanup:
     return msg;
 }
 
-char* test_10(void* od, outfunc of) {
+char* test_10(void* od, aprintf of) {
     char* msg = NULL;
     char* hstring;
     of(od, "Testing heapstring streaming, lots of text\n");
@@ -374,7 +376,7 @@ cleanup:
     return msg;
 }
 
-char* test_11(void* od, outfunc of) {
+char* test_11(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing static strings\n");
     char base[1024];
@@ -403,7 +405,7 @@ cleanup:
     return msg;
 }
 
-char* test_12(void* od, outfunc of) {
+char* test_12(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing static strings proper behavior when full\n");
     char testString[] = "hello world";
@@ -431,11 +433,11 @@ cleanup:
     return msg;
 }
 
-char* test_13(void* od, outfunc of) {
+char* test_13(void* od, aprintf of) {
     char* msg = NULL;
     symbols_t symbols;
     initSymbols(&symbols);
-    int err = scanAndPrint("stringStreaming/stringStreaming.h", &symbols, od, of);
+    int err = scanAndPrint("stringStreaming/stringstream.h", &symbols, od, of);
     if (err != 0) {
         msg = error("%s", strerror(err));
         goto cleanup;
@@ -450,7 +452,7 @@ void reallocHeist(void* patch, void* buffer, int size);
 void reallocRestore(void* buffer, int size);
 void* myFunc();
 
-char* test_14(void* od, outfunc of) {
+char* test_14(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing heapstring proper behavior when allocation fails\n");
 
@@ -492,7 +494,7 @@ cleanup:
     return msg;
 }
 
-char* test_15(void* od, outfunc of) {
+char* test_15(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing deep parse tree: (x * y) + (z - 10)\n");
 
@@ -566,7 +568,7 @@ cleanup:
     return msg;
 }
 
-char* test_16(void* od, outfunc of) {
+char* test_16(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing logic gauntlet: ((x << 2) | (y >> 1)) >= (z %% 7) && (x + y == 15)\n");
 
@@ -668,7 +670,7 @@ cleanup:
     return msg;
 }
 
-char* test_17(void* od, outfunc of) {
+char* test_17(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing node initialization via manual commands\n");
     nodeBase b;
@@ -708,7 +710,7 @@ cleanup:
     return msg;
 }
 
-char* test_18(void* od, outfunc of) {
+char* test_18(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing node initialization via string streaming\n");
     nodeBase b;
@@ -746,7 +748,7 @@ cleanup:
     return msg;
 }
 
-char* test_19(void* od, outfunc of) {
+char* test_19(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing complicated node initialization via string streaming\n");
     nodeBase b;
@@ -784,7 +786,7 @@ cleanup:
     return msg;
 }
 
-char* test_20(void* od, outfunc of) {
+char* test_20(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing identifier node initialization via string streaming\n");
     nodeBase b;
@@ -797,7 +799,7 @@ char* test_20(void* od, outfunc of) {
 
     symbols_add(&symbols, "hi", 2, (symbol_t) {.v.value=16});
 
-    char template[] = "identifier('hi', %p)";
+    char template[] = "plus > identifier('hi', %p), integer(10);";
 
     int charsScanned = nodeBaseCursor_addNodeStream(&c, template, &symbols);
 
@@ -813,7 +815,7 @@ char* test_20(void* od, outfunc of) {
     expressionNode* root = (expressionNode*) nodeBase_getRoot(&b);
 
     int result = expressionNode_eval(root);
-    int expected = 16;
+    int expected = 26;
 
     if (result != expected) {
         msg = error("expected %d, got %d", expected, result);

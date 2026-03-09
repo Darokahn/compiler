@@ -8,7 +8,7 @@
 #include "stateMachineDefs.h"
 #include "symbols.h"
 #include "keywords.h"
-#include "stringStreaming/stringStreaming.h"
+#include "stringStreaming/stringstream.h"
 #define NAMESPACESIZE 4096
 
 struct token {
@@ -44,7 +44,7 @@ static const char* getTokenColor(token_t* t) {
     return tokenTypeColors[t->type];
 }
 
-static int token_adebug(token_t* t, void* od, outfunc of) {
+static int token_adebug(token_t* t, void* od, aprintf of) {
     return of(od, "%s \"%.*s\"\n", getTokenString(t), t->lexemeLen, t->lexeme);
 }
 
@@ -58,7 +58,7 @@ static int token_fdebug(token_t* t, FILE* out) {
     return token_adebug(t, out, (void*) fprintf);
 }
 
-static int token_adebugPrettyPrint(token_t* t, void* od, outfunc of) {
+static int token_adebugPrettyPrint(token_t* t, void* od, aprintf of) {
     return of(od, "(%s)%s%.*s\033[0m", getTokenString(t), getTokenColor(t), t->lexemeLen, t->lexeme);
 }
 
@@ -72,7 +72,7 @@ static int token_fdebugPrettyPrint(token_t* t, FILE* out) {
     return token_adebugPrettyPrint(t, out, (void*) fprintf);
 }
 
-static int token_aprettyPrint(token_t* t, void* od, outfunc of) {
+static int token_aprettyPrint(token_t* t, void* od, aprintf of) {
     return of(od, "%s%.*s\033[0m", getTokenColor(t), t->lexemeLen, t->lexeme);
 }
 

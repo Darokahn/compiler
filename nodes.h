@@ -13,7 +13,8 @@
 
 #define maxalign(ptr) (void*)((intptr_t)(((uint8_t*)ptr) + (__alignof (max_align_t) - 1)) & (~(__alignof (max_align_t) - 1 )))
 typedef void* erased;
-#define erase (erased)(intptr_t)
+
+#define indexScale (__alignof(max_align_t))
 
 
 typedef max_align_t align;
@@ -26,19 +27,19 @@ typedef struct {
     int (*format)(node*, linePrinter*);
 } node_vtable;
 
-
+// indices are scaled up by `indexScale` before use because an index must be aligned with `max_align_t`.
 struct node {
     node_vtable* vtable;
-    uint32_t lastChild;
-    uint32_t firstChild;
-    uint32_t nextSibling;
-    uint32_t parent; // implicitly negative
+    uint16_t firstChild;
+    uint16_t lastChild;
+    uint16_t nextSibling;
+    uint16_t parent; // implicitly negative
 };
-    static node* node_from(node* n, int offset) {
-        return (node*) ((uint8_t*) n + offset);
+    static node* node_from(node* n, uint16_t offset) {
+        return (node*) ((uint8_t*) n + (offset * indexScale));
     }
-    static intptr_t node_between(node* n1, node* n2) {
-        return ((intptr_t) n2 - (intptr_t) n1);
+    static uint16_t node_between(node* n1, node* n2) {
+        return (uint16_t)(((intptr_t) n2 - (intptr_t) n1) / indexScale);
     }
     static node* node_firstChild(node* n) {
         if (n->firstChild == 0) return NULL;
@@ -50,18 +51,21 @@ struct node {
     }
     static int node_format(node* n, linePrinter* printer) {
         int total = 0;
-        total += linePrinter_stream(printer, "# %s(size: %d) #\nfirstChild: %d\nnextSibling: %d\nparent: %d", n->vtable->name, n->vtable->size, n->firstChild, n->nextSibling, n->parent);
+        total += linePrinter_stream(printer, "# %s(size: %d) #\nfirstChild: %d\nnextSibling: %d\nparent: %d\nchildren: {", n->vtable->name, n->vtable->size, n->firstChild, n->nextSibling, n->parent);
         printer->tabCount++;
-        total += linePrinter_stream(printer, "\n");
+        char* initialNewline = "\n";
         for (node* child = node_firstChild(n); child != NULL; child = node_nextSibling(child)) {
+            total += linePrinter_stream(printer, initialNewline);
+            initialNewline = "";
             total += child->vtable->format(child, printer);
-            total += linePrinter_stream(printer, "\n");
+            if (!printer->lineEdge) total += linePrinter_stream(printer, "\n");
         }
         printer->tabCount--;
+        total += linePrinter_stream(printer, "}\n");
         return total;
     }
 
-    static int node_print(node* n, void* od, outfunc of) {
+    static int node_print(node* n, void* od, aprintf of) {
         linePrinter printer;
         linePrinter_init(&printer, "\n", "  ", od, of);
         return n->vtable->format(n, &printer);
@@ -110,7 +114,7 @@ typedef struct {
         }
         memmove(newNodeSlot, newNode, newNode->vtable->size);
         b->lastNode = (node*) newNodeSlot;
-        return offset;
+        return offset / indexScale;
     }
 
     static int nodeBase_addChild(nodeBase* b, int parentIndex, node* newNode) {
@@ -125,7 +129,7 @@ typedef struct {
         node* lastChild = node_from(parent, parent->lastChild);
         lastChild->nextSibling = node_between(lastChild, newNode);
         parent->lastChild = node_between(parent, newNode);
-        newNode->parent = parent->lastChild; // looks odd, but their offset to one another is equal, and the `parent field` is implicitly negative
+        newNode->parent = parent->lastChild; // looks odd, but their offset to one another is equal, and the `parent` field is implicitly negative
         return node_between(b->base, newNode);
     }
 
@@ -144,8 +148,8 @@ typedef struct {
             free(b->base);
         }
     }
-#define init(nodename) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=nodename##_format} nodename* nodename##_init(nodename* n) {node_init((node*) n, &nodename##_vtable);}
-#define initf(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=formatfunc}; nodename* nodename##_init(nodename* n) {node_init((node*) n, &nodename##_vtable);}
+#define init(nodename) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=nodename##_format} nodename* nodename##_init(nodename* n) {node_init((node*) n, &nodename##_vtable); return n;}
+#define initf(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=formatfunc}; nodename* nodename##_init(nodename* n) {node_init((node*) n, &nodename##_vtable); return n;}
 
 
 typedef struct startNode {
@@ -202,8 +206,11 @@ typedef struct {
     int value;
 } integerNode;
     int integerNode_format(node* node, linePrinter* printer) {
+        /*
         integerNode* n = (integerNode*) node;
         linePrinter_stream(printer, "integer(%d)", n->value);
+        */
+        return node_format(node, printer);
     }
 
     static int integerNode_eval(void* nptr) {
@@ -227,20 +234,22 @@ typedef struct {
 
 typedef struct identifierNode {
     expressionNode node;
-    char* lexeme;
-    int lexemeLen;
     symbols_t* symbols;
+    uint32_t symbolIndex;
 } identifierNode;
 
     static int identifierNode_eval(void* nptr) {
         identifierNode* n = (identifierNode*) nptr;
-        symbol_t* sym = symbols_lookup(n->symbols, n->lexeme, n->lexemeLen);
+        symbol_t* sym = symbols_index(n->symbols, n->symbolIndex);
         return sym->v.value;
     }
 
     static int identifierNode_format(node* node, linePrinter* printer) {
+        /*
         identifierNode* n = (identifierNode*) node;
         linePrinter_stream(printer, "%.*s (%d)", n->lexemeLen, n->lexeme, identifierNode_eval(n));
+        */
+        return node_format(node, printer);
     }
 
     expressionNode_vtable identifierNode_vtable = {
@@ -253,26 +262,31 @@ typedef struct identifierNode {
     };
 
     static void identifierNode_assign(identifierNode* n, int val) {
-        symbol_t* sym = symbols_lookup(n->symbols, n->lexeme, n->lexemeLen);
+        symbol_t* sym = symbols_index(n->symbols, n->symbolIndex);
         sym->v.value = val;
     }
 
     static int identifierNode_getIndex(identifierNode* n) {
+        (void) n;
         return 0;
     }
 
     static void identifierNode_declare(identifierNode* n) {
-        symbols_add(n->symbols, n->lexeme, n->lexemeLen, (symbol_t){.type=variable_symbol});
+        symbols_index(n->symbols, n->symbolIndex)->v.initialized = true;
     }
 
     static void identifierNode_setValue(identifierNode* n, int v) {
-        symbols_lookup(n->symbols, n->lexeme, n->lexemeLen)->v.value = v;
+        symbols_index(n->symbols, n->symbolIndex)->v.value = v;
     }
 
     static void identifierNode_init(identifierNode* n, char* lexeme, int lexemeLen, symbols_t* symbols) {
         expressionNode_init((expressionNode*) n, &identifierNode_vtable);
-        n->lexeme = lexeme;
-        n->lexemeLen = lexemeLen;
+        int* indexPtr = symbols_getIndex(symbols, lexeme, lexemeLen);
+        if (indexPtr == TABLE_NULL) {
+            symbols_add(n->symbols, lexeme, lexemeLen, (symbol_t) {.type=variable_symbol, .v.initialized = false});
+            indexPtr = symbols_getIndex(symbols, lexeme, lexemeLen);
+        }
+        n->symbolIndex = *indexPtr;
         n->symbols = symbols;
     }
 
@@ -285,6 +299,7 @@ typedef struct {
 typedef expressionNode binaryOperatorNode;
 
     static int binaryOperatorNode_format(node* n, linePrinter* printer) {
+        /*
         binaryOperatorNode_vtable* table = (binaryOperatorNode_vtable*) n->vtable;
         linePrinter_stream(printer, "%s > (", table->node.node.name);
         expressionNode* lhs = (expressionNode*) node_firstChild((node*) n);
@@ -295,6 +310,8 @@ typedef expressionNode binaryOperatorNode;
         if (rhs != NULL) rhs->vtable->format(rhs, printer);
         else linePrinter_stream(printer, "(null)");
         linePrinter_stream(printer, ")");
+        */
+        return node_format(n, printer);
     }
     
     static int binaryOperatorNode_eval(void* nptr) {

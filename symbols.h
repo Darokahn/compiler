@@ -7,7 +7,7 @@
 
 #include "keywords.h"
 #include "table/table.h"
-#include "stringStreaming/stringStreaming.h"
+#include "stringStreaming/stringstream.h"
 
 enum symbolType {
     variable_symbol,
@@ -23,6 +23,7 @@ static const char* symbolStrings[] = {
 
 // As I build on the compiler, these three items will gain the information necessary
 typedef struct {
+    bool initialized;
     int value;
 } variable_t;
 
@@ -33,6 +34,7 @@ typedef struct {
 } type_t;
 
 typedef struct {
+    int* referenceLock;
     char* name;
     int nameLen;
     int type;
@@ -70,14 +72,21 @@ static void symbols_add(symbols_t* t, char* name, int nameLen, symbol_t symbol) 
     t->count++;
 }
 
+static int* symbols_getIndex(symbols_t* t, char* name, int nameLen) {
+    return table_lookup(&t->table, name, nameLen);
+}
+
+static symbol_t* symbols_index(symbols_t* t, int index) {
+    return t->storage + index;
+}
+
 static symbol_t* symbols_lookup(symbols_t* t, char* name, int nameLen) {
     int* indexPtr = table_lookup(&t->table, name, nameLen);
     if (indexPtr == TABLE_NULL) {
         return NULL;
     }
     int index = *indexPtr;
-    symbol_t sym = t->storage[index];
-    return &(t->storage[index]);
+    return t->storage + index;
 }
 
 static bool symbols_exists(symbols_t* t, char* name, int nameLen) {
@@ -127,6 +136,7 @@ static int symbols_fdebug(symbols_t* t, FILE* out, char* tabString, char* newlin
 }
 
 static int symbols_sdebug(symbols_t* t, char* out, int len, char* tabString, char* newlineString) {
+    staticstring_init(&out, len);
     return symbols_adebug(t, &out, (void*) staticstring_stream, tabString, newlineString);
 }
 

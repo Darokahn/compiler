@@ -157,6 +157,8 @@ static int nodeBaseCursor_handleEC(nodeBaseCursor* cursor, enum tokenType tok, c
 }
 
 static int nodeBaseCursor_handleECC(nodeBaseCursor* cursor, enum tokenType tok, char* lexeme, int lexemeLen) {
+    (void) lexeme;
+    (void) lexemeLen;
     declarestates;
     switch (tok) {
         case rangle_token:
@@ -180,8 +182,6 @@ static int nodeBaseCursor_handleECC(nodeBaseCursor* cursor, enum tokenType tok, 
 static int nodeBaseCursor_handleFEAC(nodeBaseCursor* cursor, enum tokenType tok, char* lexeme, int lexemeLen) {
     declarestates;
     switch (tok) {
-        case identifier_token:
-            return funcExpectingComma;
         case rangle_token:
             nodeBaseCursor_initNode(cursor);
             nodeBaseCursor_advance(cursor);
@@ -236,9 +236,9 @@ static int nodeBaseCursor_handleFEA(nodeBaseCursor* cursor, enum tokenType tok, 
 }
 
 static int nodeBaseCursor_handleFEC(nodeBaseCursor* cursor, enum tokenType tok, char* lexeme, int lexemeLen) {
+    (void) lexeme;
+    (void) lexemeLen;
     declarestates;
-    int current;
-    node* node;
     switch (tok) {
         case comma_token:
             return funcExpectingArg;
@@ -257,23 +257,9 @@ static int nodeBaseCursor_handleFEC(nodeBaseCursor* cursor, enum tokenType tok, 
     }
 }
 
-/*
-static int nodeBaseCursor_handleFPA(nodeBaseCursor* cursor, enum tokenType tok, char* lexeme, int lexemeLen) {
-    declarestates;
-    switch (tok) {
-        case identifier_token:
-            if (*lexeme != 'p') return bad;
-            return funcExpectingComma;
-        default:
-            return bad;
-    }
-}
-*/
-
 static int nodeBaseCursor_addNodeStream(nodeBaseCursor* cursor, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    node* n;
 
     char* base = fmt;
 
@@ -331,6 +317,7 @@ static int nodeBaseCursor_addNodeStream(nodeBaseCursor* cursor, char* fmt, ...) 
         if (cursor->parseState == bad) break;
         fmt = lexeme + lexemeLen;
     }
+    goto cleanup; // used so the compiler doesn't complain about the label
 cleanup:
     va_end(args);
     return fmt - base;

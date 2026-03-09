@@ -11,7 +11,7 @@
 #include "stateMachineDefs.h"
 #include "stateMachine.h"
 
-static unsigned char* emptyString = "";
+static char* emptyString = "";
 
 typedef struct {
     unsigned char* fileBase;
@@ -30,7 +30,7 @@ static int scanner_init(scanner_t* s, char* filename, symbols_t* symbols) {
     struct stat stat;
     fstat(fd, &stat);
     if (stat.st_size == 0) {
-        s->fileBase = emptyString;
+        s->fileBase = (unsigned char*) emptyString;
     }
     else {
         s->fileBase = mmap(NULL, stat.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
@@ -63,7 +63,7 @@ static void scanner_ungetc(scanner_t* s) {
 static token_t scanner_getNextToken(scanner_t* s) {
     stateMachine_t stateMachine;
     stateMachine_init(&stateMachine);
-    char* lexemeBase = s->fileReader;
+    unsigned char* lexemeBase = s->fileReader;
     int lexemeLen = 0;
     enum state currentState;
     enum tokenType lastTokenType;
@@ -85,7 +85,7 @@ static token_t scanner_getNextToken(scanner_t* s) {
     scanner_ungetc(s);
     lexemeLen--;
     token_t tok;
-    token_init(&tok, lexemeBase, lexemeLen, lastTokenType, s->symbols);
+    token_init(&tok, (char*) lexemeBase, lexemeLen, lastTokenType, s->symbols);
     return tok;
 }
 
@@ -97,7 +97,7 @@ static token_t scanner_peekNextToken(scanner_t* s) {
 }
 
 static void scanner_destroy(scanner_t* s) {
-    if (s->fileBase != NULL && s->fileBase != emptyString) {
+    if (s->fileBase != NULL && s->fileBase != (void*)emptyString) {
         munmap(s->fileBase, s->length);
     }
     *s = (scanner_t){0};
