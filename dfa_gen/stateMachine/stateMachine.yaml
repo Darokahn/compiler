@@ -24,7 +24,7 @@ start:
   '?': question
   ';': semicolon
   ':': colon
-  '=': assignment
+  '=': maybeEq
   '<': langle
   '>': rangle
   slash: div
@@ -38,6 +38,9 @@ start:
   '|': pipe
   singlequote: charliteralstart
   eof: eof
+
+colon:
+  '=': assignment
 
 identifier:
   letter: identifier
@@ -60,7 +63,8 @@ pipe:
   '=': boreq
   '|': lor
 
-assignment:
+maybeEq:
+  token: bad
   '=': eq
 
 plus:

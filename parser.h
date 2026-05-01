@@ -270,7 +270,6 @@ static bool parser_expression(parser_t* p);
 static bool parser_factor(parser_t* p) {
     ANNOUNCE;
     parserState_t save = parser_saveAnchor(p);
-    parser_nestNodes(p);
     bool success =
         parser_identifier(p) ||
         parser_integer(p) ||
@@ -378,6 +377,7 @@ static int parser_operationTail(parser_t* p, token_t* io) {
     // _saveAnchor should be called as soon as a taken path can only be defied by a fatal error.
     factorsParsed += parser_factor(p);
     if (factorsParsed == 0) return factorsParsed;
+    else return 1;
     parserState_t save = parser_saveAnchor(p);
     bool gotOperator = parser_operator(p, &candidate);
     bool success = gotOperator;
