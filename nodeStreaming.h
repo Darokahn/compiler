@@ -1,3 +1,5 @@
+#pragma once
+
 #include "table/table.h"
 #include "nodes.h"
 #include "stateMachine.h"
@@ -25,7 +27,7 @@ typedef node* (*nodeInitFunc)(node*, ...);
 
 typedef struct {
     table_t nodeIndex;
-    nodeBase* base;
+    nodeBase_t* base;
     int current;
     nodeInitFunc currentFunc;
     char* currentFuncSchema;
@@ -37,7 +39,7 @@ typedef struct {
     enum cursorDirection cursorDirection;
 } nodeBaseCursor;
 
-static void nodeBaseCursor_init(nodeBaseCursor* cursor, nodeBase* base) {
+static void nodeBaseCursor_init(nodeBaseCursor* cursor, nodeBase_t* base) {
     *cursor = (nodeBaseCursor) {0};
     int tableLen = sizeof nodeTable / sizeof *nodeTable;
     table_init(&cursor->nodeIndex, tableLen * 2);
@@ -45,6 +47,7 @@ static void nodeBaseCursor_init(nodeBaseCursor* cursor, nodeBase* base) {
         struct nodeDescriptor n = nodeTable[i];
         *table_insert(&cursor->nodeIndex, n.name, strlen(n.name)) = i;
     }
+    cursor->cursorDirection = cursor_child;
     cursor->base = base;
 }
 
@@ -128,9 +131,9 @@ static node* nodeBaseCursor_advance(nodeBaseCursor* cursor) {
 static node* nodeBaseCursor_retreat(nodeBaseCursor* cursor) {
     int currentIndex = cursor->current;
     node* currentNode = node_from(cursor->base->base, currentIndex);
-    currentIndex -= currentNode->parent;
-    cursor->current = currentIndex;
-    return node_from(cursor->base->base, currentIndex);
+    node* parent = node_parent(currentNode);
+    cursor->current = node_between(cursor->base->base, parent);
+    parent;
 }
 
 static void nodeBaseCursor_destroy(nodeBaseCursor* cursor) {

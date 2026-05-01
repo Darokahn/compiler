@@ -7,6 +7,7 @@
 #include "symbols.h"
 #include "nodes.h"
 #include "nodeStreaming.h"
+#include "parser.h"
 #include "stringStreaming/stringstream.h"
 
 char* error(const char* fmt, ...) {
@@ -38,7 +39,7 @@ int scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, aprintf of) 
     if (err != 0) return err;
     token_t t;
     t.type = ~eof_token;
-    of(od, "%-3d", s.lineCount);
+    of(od, "%-3d", s.state.lineCount);
     while (t.type != eof_token) {
         t = scanner_getNextToken(&s);
         if (t.type == bad_token) break;
@@ -47,7 +48,7 @@ int scanAndPrintDebug(char* filename, symbols_t* symbols, void* od, aprintf of) 
         }
         else if (t.type == newline_token) {
             token_aprettyPrint(&t, od, (void*) of);
-            of(od, "%-3d", s.lineCount);
+            of(od, "%-3d", s.state.lineCount);
         }
         else {
             token_adebugPrettyPrint(&t, od, (void*) of);
@@ -151,10 +152,10 @@ cleanup:
 
 char* test_4(void* od, aprintf of) {
     of(od, "Testing parse tree resize\n");
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
     node n;
-    node_init(&n, &node_defaultVtable);
+    node_init(&n, &node_defaultVtable, true);
     nodeBase_add(&b, &n);
     nodeBase_add(&b, &n);
     nodeBase_add(&b, &n);
@@ -166,7 +167,7 @@ char* test_4(void* od, aprintf of) {
 char* test_5(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing parse tree with the expression '(5 + 10) * 10' manually inserted\n");
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
 
     timesOperatorNode times;
@@ -197,7 +198,7 @@ char* test_6(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing parse tree with only one identifier\n");
 
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
 
     symbols_t symbols;
@@ -235,7 +236,7 @@ char* test_7(void* od, aprintf of) {
 
     of(od, "Testing parse tree with an addition between two identifiers\n");
 
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
 
     symbols_t symbols;
@@ -498,7 +499,7 @@ char* test_15(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing deep parse tree: (x * y) + (z - 10)\n");
 
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1); // Start small to force reallocs
 
     symbols_t symbols;
@@ -521,7 +522,7 @@ char* test_15(void* od, aprintf of) {
 
     // 3. Build the Tree
     // Root: [+]
-    int plusIdx = nodeBase_addChild(&b, 0, (node*)&plus); // Adding to root index 0
+    int plusIdx = nodeBase_add(&b, (node*)&plus); // Adding to root index 0
 
     // Left Side: [*]
     int timesIdx = nodeBase_addChild(&b, plusIdx, (node*)&times);
@@ -572,7 +573,7 @@ char* test_16(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing logic gauntlet: ((x << 2) | (y >> 1)) >= (z %% 7) && (x + y == 15)\n");
 
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
 
     symbols_t symbols;
@@ -673,7 +674,7 @@ cleanup:
 char* test_17(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing node initialization via manual commands\n");
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
     nodeBaseCursor c;
     nodeBaseCursor_init(&c, &b);
@@ -713,7 +714,7 @@ cleanup:
 char* test_18(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing node initialization via string streaming\n");
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
     nodeBaseCursor c;
     nodeBaseCursor_init(&c, &b);
@@ -751,7 +752,7 @@ cleanup:
 char* test_19(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing complicated node initialization via string streaming\n");
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
     nodeBaseCursor c;
     nodeBaseCursor_init(&c, &b);
@@ -789,7 +790,7 @@ cleanup:
 char* test_20(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing identifier node initialization via string streaming\n");
-    nodeBase b;
+    nodeBase_t b;
     nodeBase_init(&b, 1);
     nodeBaseCursor c;
     nodeBaseCursor_init(&c, &b);
@@ -827,5 +828,53 @@ cleanup:
     nodeBase_destroy(&b);
     symbols_destroy(&symbols);
     nodeBaseCursor_destroy(&c);
+    return msg;
+}
+
+char* test_21(void* od, aprintf of) {
+    char* msg = NULL;
+    parser_t parser;
+    parser_init(&parser, "testfiles/test1.c");
+    of(od, "Parsing testfiles/test1.c...\n");
+    bool success = parser_start(&parser);
+    if (!success) {
+        msg = error("Parse failed: parser_start returned failure for testfiles/test1.c\n");
+        goto cleanup;
+    }
+    of(od, "Parse succeeded: testfiles/test1.c accepted by grammar\n");
+cleanup:
+    parser_destroy(&parser);
+    return msg;
+}
+
+char* test_22(void* od, aprintf of) {
+    char* msg = NULL;
+    parser_t parser;
+    parser_init(&parser, "testfiles/test2.c");
+    of(od, "Parsing testfiles/test2.c...\n");
+    bool success = parser_start(&parser);
+    if (success) {
+        msg = error("Parse succeeded: parser_start should have rejected malformed testfiles/test2.c\n");
+        goto cleanup;
+    }
+    of(od, "Parse correctly rejected malformed testfiles/test2.c\n");
+cleanup:
+    parser_destroy(&parser);
+    return msg;
+}
+
+char* test_23(void* od, aprintf of) {
+    char* msg = NULL;
+    parser_t parser;
+    parser_init(&parser, "testfiles/test3.c");
+    of(od, "Parsing testfiles/test3.c...\n");
+    bool success = parser_start(&parser);
+    if (!success) {
+        msg = error("Parse failed: parser_start returned failure for testfiles/test3.c\n");
+        goto cleanup;
+    }
+    of(od, "Parse succeeded: testfiles/test3.c accepted by grammar\n");
+cleanup:
+    parser_destroy(&parser);
     return msg;
 }

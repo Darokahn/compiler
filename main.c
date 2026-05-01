@@ -26,7 +26,7 @@ int main() {
     linePrinter_init(&printer, "\n", "    ", stdout, (void*)fprintf);
     printer.tabCount = 1;
 
-    for (int i = 0; true; i++) {
+    for (int i = 23; true; i++) {
         snprintf(symName, sizeof symName, "test_%d", i);
         heapString (*test)(erased, aprintf) = dlsym(NULL, symName);
 

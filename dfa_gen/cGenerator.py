@@ -47,6 +47,7 @@ file = """
 enum tokenType {
     %s
 };
+typedef enum tokenType tokenType_t;
 
 static const char* tokenTypeStrings[TOKENCOUNT] = {
     %s

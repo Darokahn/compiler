@@ -11,11 +11,12 @@
 #include <sys/param.h>
 #include <stdalign.h>
 
+#define MAXNODESIZE 64
+
 #define maxalign(ptr) (void*)((intptr_t)(((uint8_t*)ptr) + (__alignof (max_align_t) - 1)) & (~(__alignof (max_align_t) - 1 )))
 typedef void* erased;
 
 #define indexScale (__alignof(max_align_t))
-
 
 typedef max_align_t align;
 
@@ -25,33 +26,63 @@ typedef struct {
     char* name;
     int size;
     int (*format)(node*, linePrinter*);
+    int (*evaluate)(void*);
 } node_vtable;
 
+typedef enum relationshipFlags {
+    eldest=1,
+    orphan=1<<1,
+    dangling=1<<2,
+} relationshipFlags;
+
+// indices are relative
 // indices are scaled up by `indexScale` before use because an index must be aligned with `max_align_t`.
 struct node {
-    node_vtable* vtable;
-    uint16_t firstChild;
-    uint16_t lastChild;
-    uint16_t nextSibling;
-    uint16_t parent; // implicitly negative
+    node_vtable* vtable; // could later become an index (though pointer is likely the right tradeoff here. Index needs to answer "index into what?" using either global state or context that the node becomes useless without.)
+    int16_t lastChild;
+    // a node's size is inside its vtable. If a node cannot have siblings and does not care about its parent, it can refrain from allocating enough size for these members.
+    uint16_t flags;
+    union {
+        int16_t nextSibling; // active if (flags & !dangling)
+        uint16_t predecessorRepeat; // inverse of above
+    };
+    union {
+        int16_t parent; // active if (eldest & flags) && !(orphan & flags)
+        int16_t oldestSibling; // active if !(eldest & flags)
+        int16_t predecessor; // active if (eldest & flags) && (orphan & flags)
+    };
 };
-    static node* node_from(node* n, uint16_t offset) {
+    static node* node_from(node* n, int16_t offset) {
         return (node*) ((uint8_t*) n + (offset * indexScale));
     }
-    static uint16_t node_between(node* n1, node* n2) {
-        return (uint16_t)(((intptr_t) n2 - (intptr_t) n1) / indexScale);
+    static int16_t node_between(node* n1, node* n2) {
+        return (int16_t)(((intptr_t) n2 - (intptr_t) n1) / indexScale);
     }
     static node* node_firstChild(node* n) {
-        if (n->firstChild == 0) return NULL;
-        return node_from(n, n->firstChild);
+        if (n->lastChild == 0) return NULL;
+        n = node_from(n, n->lastChild);
+        if (n->flags & eldest) return n;
+        else return node_from(n, n->oldestSibling);
     }
     static node* node_nextSibling(node* n) {
         if (n->nextSibling == 0) return NULL;
         return node_from(n, n->nextSibling);
     }
+    static node* node_oldestSibling(node* n) {
+        if (n->flags & eldest) return n;
+        return node_from(n, n->oldestSibling);
+    }
+    static node* node_parent(node* n) {
+        if (!(n->flags & eldest)) {
+            n = node_from(n, n->oldestSibling);
+        }
+        if (n->flags & orphan) return NULL;
+        if (n->parent == 0) return NULL;
+        return node_from(n, n->parent);
+    }
     static int node_format(node* n, linePrinter* printer) {
         int total = 0;
-        total += linePrinter_stream(printer, "# %s(size: %d) #\nfirstChild: %d\nnextSibling: %d\nparent: %d\nchildren: {", n->vtable->name, n->vtable->size, n->firstChild, n->nextSibling, n->parent);
+        total += linePrinter_stream(printer, "# %s(size: %d) # {", n->vtable->name, n->vtable->size);
         printer->tabCount++;
         char* initialNewline = "\n";
         for (node* child = node_firstChild(n); child != NULL; child = node_nextSibling(child)) {
@@ -65,6 +96,9 @@ struct node {
         return total;
     }
 
+    static int node_evaluate(void* v) {
+    }
+
     static int node_print(node* n, void* od, aprintf of) {
         linePrinter printer;
         linePrinter_init(&printer, "\n", "  ", od, of);
@@ -76,113 +110,146 @@ struct node {
         .size=sizeof(node),
         .format=node_format,
     };
-    static void node_init(node* n, node_vtable* vtable) {
+    static node* node_init(node* n, node_vtable* vtable, bool repoint) {
         n->vtable = vtable;
-        n->nextSibling = 0;
-        n->lastChild = 0;
-        n->firstChild = 0;
-        n->parent = 0;
+        if (repoint) {
+            n->nextSibling = 0;
+            n->lastChild = 0;
+            n->parent = 0;
+        }
+        return n;
     }
+
+enum nodeBase_direction {
+    CHILDFIRST=-1,  // demands offset from child to parent is positive
+    PARENTFIRST=1,  // demands offset from child to parent is negative
+    ABSOLUTE        // offset is absolute from beginning of node storage
+};
 
 typedef struct {
     node* base;
     node* lastNode;
     int blockCapacity;
-} nodeBase;
-    static void nodeBase_init(nodeBase* b, int initialSize) {
-        *b = (nodeBase){0};
+} nodeBase_t;
+    static void nodeBase_init(nodeBase_t* b, int initialSize) {
+        *b = (nodeBase_t){0};
         b->blockCapacity = MAX(initialSize, sizeof (node) * 2);
         b->base = malloc(b->blockCapacity); // blockCapacity is in bytes.
         b->lastNode = b->base;
         *b->lastNode = (node) {0};
         node n;
-        node_init(&n, &node_defaultVtable);
+        node_init(&n, &node_defaultVtable, true);
         memmove(b->base, &n, n.vtable->size);
     }
-    static int nodeBase_add(nodeBase* b, node* newNode) {
+
+    static int nodeBase_nextOffset(nodeBase_t* b) {
         uint8_t* base = (uint8_t*)b->lastNode;
         uint8_t* newNodeSlot = base + b->lastNode->vtable->size;
         newNodeSlot = maxalign(newNodeSlot);
-        size_t offset = (uint8_t*)newNodeSlot - (uint8_t*)b->base;
+        int offset = (uint8_t*)newNodeSlot - (uint8_t*)b->base;
+        return offset;
+    }
+
+    static int nodeBase_thisOffset(nodeBase_t* b) {
+        uint8_t* base = (uint8_t*)b->lastNode;
+        int offset = base - (uint8_t*)b->base;
+        return offset;
+    }
+
+    static int nodeBase_nextIndex(nodeBase_t* b) {
+        return nodeBase_nextOffset(b) / indexScale;
+    }
+
+    static int nodeBase_thisIndex(nodeBase_t* b) {
+        return nodeBase_thisOffset(b) / indexScale;
+    }
+
+    static int nodeBase_add(nodeBase_t* b, node* newNode) {
+        int predecessorIndex = nodeBase_thisIndex(b);
+        int offset = nodeBase_nextOffset(b);
+        int index = nodeBase_nextIndex(b);
         int minimumSize = offset + newNode->vtable->size;
         if (minimumSize >= b->blockCapacity) {
             b->blockCapacity *= 2;
             b->blockCapacity = MAX(b->blockCapacity, minimumSize);
             void* newBase = realloc(b->base, b->blockCapacity);
             b->base = newBase;
-            newNodeSlot = (uint8_t*)b->base + offset;
         }
+        uint8_t* newNodeSlot = (uint8_t*)b->base + offset;
+        newNode->flags = eldest | orphan;
+        newNode->predecessor = predecessorIndex - index;
         memmove(newNodeSlot, newNode, newNode->vtable->size);
         b->lastNode = (node*) newNodeSlot;
-        return offset / indexScale;
+        return index;
     }
 
-    static int nodeBase_addChild(nodeBase* b, int parentIndex, node* newNode) {
+    static int nodeBase_addSibling(nodeBase_t* b, int siblingIndex, node* newNode) {
         int newNodeIndex = nodeBase_add(b, newNode);
         newNode = node_from(b->base, newNodeIndex);
-        node* parent = node_from(b->base, parentIndex);
-        int newNodeOffset = node_between(parent, newNode);
-        if (parent->firstChild == 0) {
-            parent->firstChild = newNodeOffset;
-            parent->lastChild = parent->firstChild;
-        }
-        node* lastChild = node_from(parent, parent->lastChild);
-        lastChild->nextSibling = node_between(lastChild, newNode);
-        parent->lastChild = node_between(parent, newNode);
-        newNode->parent = parent->lastChild; // looks odd, but their offset to one another is equal, and the `parent` field is implicitly negative
-        return node_between(b->base, newNode);
-    }
-
-    static int nodeBase_addSibling(nodeBase* b, int siblingIndex, node* newNode) {
         node* sibling = node_from(b->base, siblingIndex);
-        int parentIndex = siblingIndex - sibling->parent;
-        return nodeBase_addChild(b, parentIndex, newNode);
+        newNode->flags &= ~(eldest | orphan);
+        int offset = newNodeIndex - siblingIndex;
+        sibling->nextSibling = offset;
+        if (sibling->flags & eldest) newNode->oldestSibling = -offset;
+        else newNode->oldestSibling = sibling->oldestSibling - offset;
+        return newNodeIndex;
     }
 
-    static node* nodeBase_getRoot(nodeBase* b) {
-        return node_from(b->base, b->base->firstChild);
+    static int nodeBase_addChild(nodeBase_t* b, int parentIndex, node* newNode) {
+        node* parent = node_from(b->base, parentIndex);
+        if (parent->lastChild == 0) {
+            int newNodeIndex = nodeBase_add(b, newNode);
+            parent = node_from(b->base, parentIndex);
+            newNode = node_from(b->base, newNodeIndex);
+            newNode->flags &= ~orphan;
+            newNode->parent = parentIndex - newNodeIndex;
+            parent->lastChild = newNodeIndex - parentIndex;
+            newNode->flags |= eldest;
+            return newNodeIndex;
+        }
+        else {
+            int lastChildIndex = parentIndex + parent->lastChild;
+            return nodeBase_addSibling(b, lastChildIndex, newNode);
+        }
     }
 
-    static void nodeBase_destroy(nodeBase* b) {
+    static node* nodeBase_getRoot(nodeBase_t* b) {
+        return node_firstChild(b->base);
+    }
+
+    static void nodeBase_destroy(nodeBase_t* b) {
         if (b->base != NULL) {
             free(b->base);
         }
     }
-#define init(nodename) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=nodename##_format} nodename* nodename##_init(nodename* n) {node_init((node*) n, &nodename##_vtable); return n;}
-#define initf(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=formatfunc}; nodename* nodename##_init(nodename* n) {node_init((node*) n, &nodename##_vtable); return n;}
+#define init(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(nodename), .format=formatfunc}; nodename* nodename##_init(nodename* n) {return node_init((node*) n, &nodename##_vtable, true); return n;}
+
+#define VTABLEDEFAULTS .size=sizeof(node), .format=node_format, .evaluate=node_evaluate
 
 
-typedef struct startNode {
-    node node;
-} startNode;
-    initf(startNode, node_format);
+typedef node startNode;
+init(startNode, node_format);
 
-typedef struct programNode {
-    node node;
-} programNode;
-    initf(programNode, node_format);
+typedef node programNode;
+init(programNode, node_format);
 
-typedef struct blockNode {
-    node node;
-} blockNode;
-    initf(blockNode, node_format);
+typedef node blockNode;
+init(blockNode, node_format);
 
-typedef struct statementGroupNode {
-    node node;
-    int lastStatement;
-} statementGroupNode;
-    initf(statementGroupNode, node_format);
+typedef node statementGroupNode;
+init(statementGroupNode, node_format);
 
-typedef struct statementNode {
-    node node;
-    int next;
-} statementNode;
-    initf(statementNode, node_format);
+typedef node statementNode;
+init(statementNode, node_format);
 
-typedef struct declarationStatementNode {
-    statementNode node;
-} declarationStatementNode;
-    initf(declarationStatementNode, node_format);
+typedef node declarationStatementNode;
+init(declarationStatementNode, node_format);
+
+typedef node assignmentStatementNode;
+init(assignmentStatementNode, node_format);
+
+typedef node coutStatementNode;
+init(coutStatementNode, node_format);
 
 typedef int (*evalFunc)(void*);
 
@@ -192,8 +259,8 @@ typedef struct {
 } expressionNode_vtable;
 
 typedef node expressionNode;
-    static void expressionNode_init(expressionNode* n, expressionNode_vtable* vtable) {
-        node_init((node*) n, (node_vtable*) vtable);
+    static expressionNode* expressionNode_init(expressionNode* n, expressionNode_vtable* vtable) {
+        return node_init((node*) n, (node_vtable*) vtable, true);
     }
 
     static inline int expressionNode_eval(expressionNode* n) {
@@ -206,11 +273,8 @@ typedef struct {
     int value;
 } integerNode;
     int integerNode_format(node* node, linePrinter* printer) {
-        /*
         integerNode* n = (integerNode*) node;
-        linePrinter_stream(printer, "integer(%d)", n->value);
-        */
-        return node_format(node, printer);
+        return linePrinter_stream(printer, "integer(%d)", n->value);
     }
 
     static int integerNode_eval(void* nptr) {
@@ -227,7 +291,7 @@ typedef struct {
         .eval = integerNode_eval,
     };
 
-    static void integerNode_init(integerNode* n, int inner) {
+    static integerNode* integerNode_init(integerNode* n, int inner) {
         expressionNode_init((expressionNode*) n, &integerNode_vtable);
         n->value = inner;
     }
@@ -236,6 +300,8 @@ typedef struct identifierNode {
     expressionNode node;
     symbols_t* symbols;
     uint32_t symbolIndex;
+    char* lexeme;
+    int lexemeLen;
 } identifierNode;
 
     static int identifierNode_eval(void* nptr) {
@@ -245,11 +311,11 @@ typedef struct identifierNode {
     }
 
     static int identifierNode_format(node* node, linePrinter* printer) {
-        /*
         identifierNode* n = (identifierNode*) node;
-        linePrinter_stream(printer, "%.*s (%d)", n->lexemeLen, n->lexeme, identifierNode_eval(n));
-        */
+        return linePrinter_stream(printer, "%.*s (%d)", n->lexemeLen, n->lexeme, identifierNode_eval(n));
+        /*
         return node_format(node, printer);
+        */
     }
 
     expressionNode_vtable identifierNode_vtable = {
@@ -279,15 +345,18 @@ typedef struct identifierNode {
         symbols_index(n->symbols, n->symbolIndex)->v.value = v;
     }
 
-    static void identifierNode_init(identifierNode* n, char* lexeme, int lexemeLen, symbols_t* symbols) {
+    static identifierNode* identifierNode_init(identifierNode* n, char* lexeme, int lexemeLen, symbols_t* symbols) {
         expressionNode_init((expressionNode*) n, &identifierNode_vtable);
         int* indexPtr = symbols_getIndex(symbols, lexeme, lexemeLen);
+        n->symbols = symbols;
+        n->lexeme = lexeme;
+        n->lexemeLen = lexemeLen;
         if (indexPtr == TABLE_NULL) {
             symbols_add(n->symbols, lexeme, lexemeLen, (symbol_t) {.type=variable_symbol, .v.initialized = false});
             indexPtr = symbols_getIndex(symbols, lexeme, lexemeLen);
         }
         n->symbolIndex = *indexPtr;
-        n->symbols = symbols;
+        return n;
     }
 
 typedef int (*arithmeticFunc)(int, int);
@@ -297,9 +366,7 @@ typedef struct {
 } binaryOperatorNode_vtable;
 
 typedef expressionNode binaryOperatorNode;
-
     static int binaryOperatorNode_format(node* n, linePrinter* printer) {
-        /*
         binaryOperatorNode_vtable* table = (binaryOperatorNode_vtable*) n->vtable;
         linePrinter_stream(printer, "%s > (", table->node.node.name);
         expressionNode* lhs = (expressionNode*) node_firstChild((node*) n);
@@ -310,8 +377,6 @@ typedef expressionNode binaryOperatorNode;
         if (rhs != NULL) rhs->vtable->format(rhs, printer);
         else linePrinter_stream(printer, "(null)");
         linePrinter_stream(printer, ")");
-        */
-        return node_format(n, printer);
     }
     
     static int binaryOperatorNode_eval(void* nptr) {
@@ -322,35 +387,20 @@ typedef expressionNode binaryOperatorNode;
         return table->operator(((expressionNode_vtable*)lhs->vtable)->eval(lhs), ((expressionNode_vtable*)rhs->vtable)->eval(rhs));
     }
 
-    static void binaryOperatorNode_init(binaryOperatorNode* n, binaryOperatorNode_vtable* vtable) {
+    static binaryOperatorNode* binaryOperatorNode_init(binaryOperatorNode* n, binaryOperatorNode_vtable* vtable) {
         vtable->node.eval = binaryOperatorNode_eval;
-        expressionNode_init((expressionNode*) n, (expressionNode_vtable*) vtable);
-    }
-
-typedef struct {
-    binaryOperatorNode node;
-} plusOperatorNode;
-    static int plusOperatorNode_op(int x, int y) {
-        return x + y;
-    }
-    
-    binaryOperatorNode_vtable plusOperatorNode_vtable = {
-        .node={{.name="plus", .size=sizeof(plusOperatorNode), .format=binaryOperatorNode_format}},
-        .operator=plusOperatorNode_op,
-    };
-    
-    static void plusOperatorNode_init(plusOperatorNode* n) {
-        binaryOperatorNode_init((binaryOperatorNode*) n, &plusOperatorNode_vtable);
+        return (binaryOperatorNode*) expressionNode_init((expressionNode*) n, (expressionNode_vtable*) vtable);
     }
 
 #define DEFINE_BINARY_OP(opname, op) \
-typedef struct { binaryOperatorNode node; } opname##OperatorNode; \
+typedef binaryOperatorNode opname##OperatorNode; \
 static int opname##OperatorNode_op(int x, int y) { return x op y; } \
 binaryOperatorNode_vtable opname##OperatorNode_vtable = {.node={{.name=#opname,.size=sizeof(opname##OperatorNode),.format=binaryOperatorNode_format}}, .operator=opname##OperatorNode_op}; \
-static void opname##OperatorNode_init(opname##OperatorNode* n) { \
-    binaryOperatorNode_init((binaryOperatorNode*) n, &opname##OperatorNode_vtable); \
+static opname##OperatorNode* opname##OperatorNode_init(opname##OperatorNode* n) { \
+    return (opname##OperatorNode*) binaryOperatorNode_init((binaryOperatorNode*) n, &opname##OperatorNode_vtable); \
 }
 
+DEFINE_BINARY_OP(plus, +);
 DEFINE_BINARY_OP(minus, -);
 DEFINE_BINARY_OP(times, *);
 DEFINE_BINARY_OP(divide, /);
@@ -404,6 +454,26 @@ struct nodeDescriptor nodeTable[] = {
     desc(ge),
     desc(gt),
     desc(le),
-    desc(lt)
+    desc(lt),
 };
 
+// TODO: This union is mainly used because it is guaranteed to have the largest size
+// among any of these nodes. New nodes must perpetually be added. There is no native
+// C method for ensuring this happens. Leaf nodes that do not have additional members
+// (node types that are a typedef of another type) do not have to be added.
+typedef union {
+    node node;
+    expressionNode expressionNode;
+    binaryOperatorNode binaryOperatorNode;
+    programNode programNode;
+    blockNode blockNode;
+    statementGroupNode statementGroupNode;
+    statementNode statementNode;
+    declarationStatementNode declarationStatementNode;
+    integerNode integerNode;
+    identifierNode identifierNode;
+} nodeAny_t;
+
+#undef init
+#undef desc
+#undef DEFINE_BINARY_OP

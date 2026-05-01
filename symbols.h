@@ -16,7 +16,7 @@ enum symbolType {
 };
 
 static const char* symbolStrings[] = {
-    "variable",
+    "identifier",
     "keyword",
     "type"
 };
