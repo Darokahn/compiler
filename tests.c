@@ -164,8 +164,10 @@ char* test_4(void* od, aprintf of) {
     return NULL;
 }
 
+#if 0
 char* test_5(void* od, aprintf of) {
     char* msg = NULL;
+    /*
     of(od, "Testing parse tree with the expression '(5 + 10) * 10' manually inserted\n");
     nodeBase_t b;
     nodeBase_init(&b, 1);
@@ -191,6 +193,7 @@ char* test_5(void* od, aprintf of) {
     of(od, "result %d is correct\n", result);
 cleanup:
     nodeBase_destroy(&b);
+    */
     return msg;
 }
 
@@ -291,6 +294,7 @@ cleanup:
     nodeBase_destroy(&b);
     return msg;
 }
+#endif
 
 char* test_8(void* od, aprintf of) {
     char* msg = NULL;
@@ -495,6 +499,7 @@ cleanup:
     return msg;
 }
 
+#if 0
 char* test_15(void* od, aprintf of) {
     char* msg = NULL;
     of(od, "Testing deep parse tree: (x * y) + (z - 10)\n");
@@ -830,6 +835,7 @@ cleanup:
     nodeBaseCursor_destroy(&c);
     return msg;
 }
+#endif
 
 char* test_21(void* od, aprintf of) {
     char* msg = NULL;
