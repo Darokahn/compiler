@@ -10,10 +10,7 @@
 #include "utils.h"
 
 #include <sys/param.h>
-
-#define ANNOUNCE printf("entering %s\n", __func__)
-
-#define SUCCESS printf("%s %s\n", success ? "SUCCEEDED" : "FAILED", __func__)
+#include <signal.h>
 
 // will later hold information 
 typedef struct {
@@ -60,10 +57,17 @@ static void parser_nestNodes(parser_t* p) {
     predecessor->flags |= dangling;
 }
 
+static void parser_deNestNodes(parser_t* p);
+
 // claim the last batch of nodes on behalf of the new parent, and restore the last save-state
 static void parser_claimNodes(parser_t* p, node* n) {
     node* youngest = node_from(p->nodes.base, p->nodeCursor);
     node* eldest = node_oldestSibling(youngest);
+    if (youngest->flags & dangling) {
+        parser_deNestNodes(p);
+        youngest = NULL;
+        goto addNode;
+    }
     node* predecessor = node_from(eldest, eldest->predecessor);
     if (predecessor->predecessorRepeat <= 0) {
         predecessor->flags &= ~dangling;
@@ -73,16 +77,23 @@ static void parser_claimNodes(parser_t* p, node* n) {
     }
     p->nodeCursor = node_between(p->nodes.base, predecessor);
     int youngestIndex = node_between(p->nodes.base, youngest);
+addNode:
     int newParentIndex = parser_addNode(p, n);
     node* newParent = node_from(p->nodes.base, newParentIndex);
-    newParent->lastChild = youngestIndex - newParentIndex;
+    if (youngest) newParent->lastChild = youngestIndex - newParentIndex;
 }
 
 // reject a prior nesting for just one node; do nothing if > 1
 static bool parser_claimIdentity(parser_t* p) {
     node* youngest = node_from(p->nodes.base, p->nodeCursor);
     node* eldest = node_oldestSibling(youngest);
-    if (youngest != eldest) return false;
+    if (youngest->flags & dangling) {
+        parser_deNestNodes(p);
+        return false;
+    }
+    if (youngest != eldest) {
+        return false;
+    }
     node* predecessor = node_from(eldest, eldest->predecessor);
     if (predecessor->predecessorRepeat <= 0) {
         predecessor->flags &= ~dangling;
@@ -98,14 +109,20 @@ static bool parser_claimIdentity(parser_t* p) {
     return true;
 }
 
-// deepen a prior nesting for just one node; do nothing if > 1
-static bool parser_nestIdentity(parser_t* p) {
+static bool parser_replaceNodes(parser_t* p, node* n) {
     node* youngest = node_from(p->nodes.base, p->nodeCursor);
     node* eldest = node_oldestSibling(youngest);
-    if (youngest != eldest) return false;
+    if (youngest->flags & dangling) {
+        youngest = NULL;
+        goto addNode;
+    }
     node* predecessor = node_from(eldest, eldest->predecessor);
-    predecessor->predecessorRepeat++;
-    return true;
+    p->nodeCursor = node_between(p->nodes.base, predecessor);
+    int youngestIndex = node_between(p->nodes.base, youngest);
+addNode:
+    int newParentIndex = parser_addNode(p, n);
+    node* newParent = node_from(p->nodes.base, newParentIndex);
+    if (youngest) newParent->lastChild = youngestIndex - newParentIndex;
 }
 
 static void parser_deNestNodes(parser_t* p) {
@@ -164,7 +181,7 @@ static void parser_fail(parser_t* p, char* fmt, ...) {
 
 static token_t parser_getToken(parser_t* p, bool allowWhitespace) {
     token_t tok = {.type=whitespace_token};
-    while (tok.type == whitespace_token || tok.type == newline_token) {
+    while (tok.type == whitespace_token || tok.type == newline_token || tok.type == blockcomment_token || tok.type == linecomment_token) {
         tok = scanner_getNextToken(&p->scanner);
         if (allowWhitespace) break;
     }
@@ -178,7 +195,6 @@ static bool parser_boolMatch(parser_t* p, enum tokenType typ) {
         parser_fail(p, "failed to match token types %s, %s\n", getTokenString(&tok), getTokenString(&parser_match));
         return false;
     }
-    printf("matched token type %s\n", getTokenString(&parser_match));
     return true;
 }
 
@@ -189,7 +205,6 @@ static token_t parser_tokenMatch(parser_t* p, enum tokenType typ) {
         parser_fail(p, "failed to match token types %s, %s\n", getTokenString(&tok), getTokenString(&match));
         return (token_t) {.type=bad_token, .lexeme=NULL, .lexemeLen=0};
     }
-    printf("matched token type %s\n", getTokenString(&match));
     return tok;
 }
 
@@ -200,7 +215,6 @@ static token_t parser_firstMatch(parser_t* p, int typeCount, tokenType_t types[]
         if (tok.type != match.type) {
             continue;
         }
-        printf("matched token type %s\n", getTokenString(&match));
         return tok;
     }
     parser_fail(p, "failed to match any token type.\n");
@@ -213,12 +227,10 @@ static bool parser_matchIdentifier(parser_t* p, char* lexeme, int lexemeLen) {
         parser_fail(p, "failed to match identifier on lexeme %.*s", lexemeLen, lexeme);
         return false;
     }
-    printf("matched identifier %.*s\n", lexemeLen, lexeme);
     return true;
 }
 
 static bool parser_integer(parser_t* p) {
-    ANNOUNCE;
     parserState_t save = parser_saveAnchor(p);
     static tokenType_t integerLiteralTypes[] = {
         decimal_token,
@@ -259,27 +271,23 @@ static bool parser_integer(parser_t* p) {
         parser_addNode(p, &n->node);
     }
 
-    SUCCESS;
     parser_restoreAnchor(p, save);
     return success;
 }
 
 static bool parser_identifier(parser_t* p) {
-    ANNOUNCE;
     token_t tok = parser_tokenMatch(p, identifier_token);
     bool success = tok.type != bad_token;
     if (success) {
         identifierNode* n = identifierNode_init(stack(identifierNode), tok.lexeme, tok.lexemeLen, &p->symbols);
         parser_addNode(p, &n->node);
     }
-    SUCCESS;
     return success;
 }
 
 static bool parser_expression(parser_t* p);
 
 static bool parser_factor(parser_t* p) {
-    ANNOUNCE;
     parserState_t save = parser_saveAnchor(p);
     bool success =
         parser_identifier(p) ||
@@ -287,31 +295,34 @@ static bool parser_factor(parser_t* p) {
         (parser_boolMatch(p, lparen_token) && parser_expression(p) && parser_boolMatch(p, rparen_token))
     ;
     parser_restoreAnchor(p, save);
-    SUCCESS;
     return success;
 }
-
-typedef enum precedence {
-    bad,
-    assignment,
-    or,
-    and,
-    equality,
-    addsub,
-    divmul,
-} precedence;
 
 node* parser_getNode(parser_t* p, token_t template, nodeAny_t* in) {
     node* storage = (node*) in;
     switch (template.type) {
-        case star_token:
-            return storage = timesOperatorNode_init(erase storage);
-        case div_token:
-            return storage = divideOperatorNode_init(erase storage);
         case plus_token:
             return storage = plusOperatorNode_init(erase storage);
         case minus_token:
             return storage = minusOperatorNode_init(erase storage);
+        case star_token:
+            return storage = timesOperatorNode_init(erase storage);
+        case div_token:
+            return storage = divideOperatorNode_init(erase storage);
+        case mod_token:
+            return storage = modOperatorNode_init(erase storage);
+        case and_token:
+            return storage = andOperatorNode_init(erase storage);
+        case lor_token:
+            return storage = orOperatorNode_init(erase storage);
+        case amp_token:
+            return storage = bitwiseAndOperatorNode_init(erase storage);
+        case pipe_token:
+            return storage = bitwiseOrOperatorNode_init(erase storage);
+        case shiftleft_token:
+            return storage = shlOperatorNode_init(erase storage);
+        case shiftright_token:
+            return storage = shrOperatorNode_init(erase storage);
         case langle_token:
             return storage = ltOperatorNode_init(erase storage);
         case le_token:
@@ -324,10 +335,6 @@ node* parser_getNode(parser_t* p, token_t template, nodeAny_t* in) {
             return storage = eqOperatorNode_init(erase storage);
         case noteq_token:
             return storage = neqOperatorNode_init(erase storage);
-        case and_token:
-            return storage = andOperatorNode_init(erase storage);
-        case lor_token:
-            return storage = orOperatorNode_init(erase storage);
         case assignment_token:
             return storage = assignmentOperatorNode_init(erase storage);
         case bad_token:
@@ -336,14 +343,29 @@ node* parser_getNode(parser_t* p, token_t template, nodeAny_t* in) {
     }
 }
 
+typedef enum precedence {
+    bad,
+    assignment,
+    or,
+    and,
+    equality,
+    shift,
+    addsub,
+    divmul,
+} precedence;
+
 precedence getPrecedence(tokenType_t operator) {
     switch (operator) {
         case star_token:
         case div_token:
+        case mod_token:
             return divmul;
         case plus_token:
         case minus_token:
             return addsub;
+        case shiftleft_token:
+        case shiftright_token:
+            return shift;
         case langle_token:
         case le_token:
         case rangle_token:
@@ -380,94 +402,88 @@ cleanup:
     return returnValue;
 }
 
-static bool parser_operationTail(parser_t* p, token_t* io) {
+typedef enum {
+    invalid,
+    empty,
+    full
+} operationTailStatus;
+
+static operationTailStatus parser_operationTail(parser_t* p, token_t* io) {
+    operationTailStatus status = empty;
     token_t base = *io;
     precedence refPrecedence = getPrecedence(base.type);
+    bool baseCase = refPrecedence == bad;
 
     token_t candidate;
     parser_nestNodes(p);
     bool foundFactor = parser_factor(p);
     if (!foundFactor) {
         parser_deNestNodes(p);
-        // base case is `base.type = bad_token`, in which case it is okay to not have a factor.
-        return base.type != bad_token;
+        // in base case, there is no prior operator; it is okay to not have a factor.
+        return baseCase ? empty : invalid;
     }
+    status = full;
     parserState_t save = parser_saveAnchor(p);
     bool gotOperator = parser_operator(p, &candidate);
-    if (!gotOperator) {
-        goto addCandidate;
+    if (getPrecedence(candidate.type) <= refPrecedence) {
+        parser_claimIdentity(p);
     }
-    while (getPrecedence(candidate.type) > refPrecedence) {
-        bool validExpression = parser_operationTail(p, &candidate);
+    else {
+loop:   bool validExpression = parser_operationTail(p, &candidate);
         if (!validExpression) {
+            status = invalid;
             goto cleanup;
         }
-    }
-addCandidate:
-    if (base.type != bad_token) {
-        node* newOperator = parser_getNode(p, base, stack(nodeAny_t));
-        // de-nest the top-of-stack operand to make it sibling for prior
+        if (getPrecedence(candidate.type) > refPrecedence) {
+            goto loop;
+        }
         parser_claimIdentity(p);
+    }
+    if (!baseCase) {
+        node* newOperator = parser_getNode(p, base, stack(nodeAny_t));
         // claim entire run of siblings as children for newOperator
-        parser_claimNodes(p, newOperator);
-        // re-nest them
-        if (gotOperator) parser_nestIdentity(p);
+        parser_replaceNodes(p, newOperator);
     }
     *io = candidate;
 cleanup:
     parser_restoreAnchor(p, save);
-    return true;
+    return status;
 }
 
 static bool parser_expression(parser_t* p) {
-    ANNOUNCE;
     parser_nestNodes(p);
     parserState_t save = parser_saveAnchor(p);
-    bool success = parser_operationTail(p, stackval(token_t, .type=bad_token));
+    operationTailStatus success = parser_operationTail(p, stackval(token_t, .type=bad_token));
     parser_restoreAnchor(p, save);
-    parser_claimIdentity(p);
-    SUCCESS;
-    return success;
+    if (success == full) parser_claimIdentity(p);
+    else parser_deNestNodes(p);
+    return success != invalid;
 }
 
 static bool parser_declarationStatement(parser_t* p) {
-    ANNOUNCE;
     parser_nestNodes(p);
     bool success =
         parser_matchIdentifier(p, "int", sizeof "int" - 1) && 
-        parser_identifier(p) &&
-        parser_boolMatch(p, semicolon_token)
+        parser_identifier(p)
     ;
-    if (success) {
-        declarationStatementNode* n = declarationStatementNode_init(stack(declarationStatementNode));
-        parser_claimNodes(p, n);
+    parserState_t save = parser_saveAnchor(p);
+    if (!success) goto cleanup;
+    if (parser_boolMatch(p, assignment_token)) {
+        success = parser_expression(p);
     }
-    else parser_deNestNodes(p);
-    SUCCESS;
-    return success;
-}
-
-static bool parser_assignmentStatement(parser_t* p) {
-    ANNOUNCE;
-    parser_nestNodes(p);
-    bool success =
-        parser_identifier(p) &&
-        parser_boolMatch(p, assignment_token) &&
-        parser_expression(p) &&
-        parser_boolMatch(p, semicolon_token)
-    ;
-    if (success) {
-        assignmentStatementNode* n = assignmentStatementNode_init(stack(assignmentStatementNode));
-        parser_claimNodes(p, n);
-    }
-    else parser_deNestNodes(p);
-    SUCCESS;
+    if (!success) goto cleanup;
+    success = parser_boolMatch(p, semicolon_token);
+    if (!success) goto cleanup;
+    declarationStatementNode* n = declarationStatementNode_init(stack(declarationStatementNode));
+    parser_claimNodes(p, n);
+cleanup:
+    if (!success) parser_deNestNodes(p);
+    parser_restoreAnchor(p, save);
     return success;
 }
 
 static bool parser_coutStatement(parser_t* p) {
     parser_nestNodes(p);
-    ANNOUNCE;
     bool success =
         parser_matchIdentifier(p, "cout", sizeof "cout" - 1) &&
         parser_boolMatch(p, shiftleft_token) &&
@@ -479,7 +495,6 @@ static bool parser_coutStatement(parser_t* p) {
         parser_claimNodes(p, n);
     }
     else parser_deNestNodes(p);
-    SUCCESS;
     return success;
 }
 
@@ -538,9 +553,9 @@ static bool parser_forStatement(parser_t* p) {
         parser_matchIdentifier(p, "for", sizeof "while" - 1) &&
 
         parser_boolMatch(p, lparen_token)  &&
-            parser_statement(p) &&
-            parser_statement(p) &&
-            parser_statement(p) &&
+            (parser_declarationStatement(p) || (parser_expression(p) && parser_boolMatch(p, semicolon_token))) &&
+            parser_expression(p) && parser_boolMatch(p, semicolon_token) &&
+            parser_expression(p) &&
         parser_boolMatch(p, rparen_token) &&
 
         parser_statement(p)
@@ -556,7 +571,6 @@ static bool parser_forStatement(parser_t* p) {
 static bool parser_block(parser_t* p);
 
 static bool parser_statement(parser_t* p) {
-    ANNOUNCE;
     parserState_t save = parser_saveAnchor(p);
     bool success =
         parser_ifStatement(p) ||
@@ -565,29 +579,25 @@ static bool parser_statement(parser_t* p) {
         parser_coutStatement(p) ||
         parser_declarationStatement(p) ||
         parser_block(p) ||
-        parser_assignmentStatement(p)
+        parser_expression(p) && parser_boolMatch(p, semicolon_token);
     ;
     parser_restoreAnchor(p, save);
-    SUCCESS;
     return success;
 }
 
 static bool parser_statementGroup(parser_t* p) {
-    ANNOUNCE;
     parserState_t save = parser_saveAnchor(p);
     bool success =
         (parser_statement(p) && parser_statementGroup(p))
     ;
     parser_restoreAnchor(p, save);
     success = true;
-    SUCCESS;
     return success;
 }
 
 static bool parser_block(parser_t* p) {
     parser_nestNodes(p);
     parserState_t save = parser_saveAnchor(p);
-    ANNOUNCE;
     bool success =
         parser_boolMatch(p, lcurly_token) && parser_boolMatch(p, rcurly_token) ||
 
@@ -595,7 +605,6 @@ static bool parser_block(parser_t* p) {
         parser_statementGroup(p) &&
         parser_boolMatch(p, rcurly_token)
     ;
-    SUCCESS;
     if (success) {
         blockNode* b = blockNode_init(stack(blockNode));
         parser_claimNodes(p, b);
@@ -607,7 +616,6 @@ static bool parser_block(parser_t* p) {
 
 static bool parser_program(parser_t* p) {
     parser_nestNodes(p);
-    ANNOUNCE;
     bool success =
         parser_matchIdentifier(p, "int", sizeof "int" - 1) &&
         parser_matchIdentifier(p, "main", sizeof "main" - 1) &&
@@ -623,17 +631,17 @@ static bool parser_program(parser_t* p) {
         node_evaluate(program);
     }
     else parser_deNestNodes(p);
-    SUCCESS;
     return success;
 }
 
 static bool parser_start(parser_t* p) {
-    ANNOUNCE;
     parserState_t save = parser_saveAnchor(p);
     bool success =
         parser_program(p) &&
         parser_boolMatch(p, eof_token)
     ;
-    SUCCESS;
     return success;
+}
+
+static bool parser_exec(parser_t* p) {
 }

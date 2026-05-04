@@ -1,6 +1,7 @@
 #pragma once
 
 #include "symbols.h"
+#include "utils.h"
 
 #include <stdalign.h>
 #include <stddef.h>
@@ -141,15 +142,16 @@ typedef struct {
     node* lastNode;
     int blockCapacity;
 } nodeBase_t;
+    static int nodeBase_add(nodeBase_t* b, node* newNode);
+    static node* startNode_init(node*);
     static void nodeBase_init(nodeBase_t* b, int initialSize) {
         *b = (nodeBase_t){0};
         b->blockCapacity = MAX(initialSize, sizeof (node) * 2);
         b->base = malloc(b->blockCapacity); // blockCapacity is in bytes.
         b->lastNode = b->base;
         *b->lastNode = (node) {0};
-        node n;
-        node_init(&n, &node_defaultVtable, true);
-        memmove(b->base, &n, n.vtable->size);
+        node* n = startNode_init(stack(node));
+        memmove(b->base, n, sizeof(*n));
     }
 
     static int nodeBase_nextOffset(nodeBase_t* b) {
@@ -236,8 +238,6 @@ typedef struct {
 
 #define init(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(node), .format=node_format, .evaluate=node_evaluate}; nodename* nodename##_init(nodename* n) {return node_init((node*) n, &nodename##_vtable, true); return n;}
 
-
-
 typedef node startNode;
 init(startNode, node_format);
 
@@ -319,7 +319,9 @@ typedef node assignmentOperatorNode;
         assignmentOperatorNode* n = in;
         identifierNode* var = (identifierNode*) node_firstChild(n);
         node* valueNode = node_nextSibling((node*)var);
-        identifierNode_assign(var, evaluate(valueNode));
+        int value = evaluate(valueNode);
+        identifierNode_assign(var, value);
+        return value;
     }
     node_vtable assignmentOperatorNode_vtable = {
         .name="assignment",
@@ -336,6 +338,8 @@ int declarationStatementNode_eval(void* in) {
     declarationStatementNode* n = in;
     identifierNode* var = (identifierNode*) node_firstChild(n);
     identifierNode_declare(var);
+    node* value = node_nextSibling((node*)var);
+    if (value) identifierNode_assign(var, evaluate(value));
     return 0;
 }
 node_vtable declarationStatementNode_vtable = {
@@ -348,28 +352,9 @@ declarationStatementNode* declarationStatementNode_init(declarationStatementNode
     return node_init(n, &declarationStatementNode_vtable, true);
 }
 
-typedef node assignmentStatementNode;
-int assignmentStatementNode_eval(void* in) {
-    assignmentStatementNode* n = in;
-    identifierNode* identifier = (identifierNode*) node_firstChild(n);
-    node* valueNode = node_nextSibling(erase identifier);
-    int value = evaluate(valueNode);
-    identifierNode_assign(identifier, value);
-    return value;
-}
-node_vtable assignmentStatementNode_vtable = {
-    .name="assignmentStatementNode",
-    .size=sizeof(assignmentStatementNode),
-    .format=node_format,
-    .evaluate=assignmentStatementNode_eval,
-};
-assignmentStatementNode* assignmentStatementNode_init(assignmentStatementNode* n) {
-    return node_init(n, &assignmentStatementNode_vtable, true);
-}
-
 typedef node coutStatementNode;
 int coutStatementNode_eval(void* in) {
-    assignmentStatementNode* n = in;
+    coutStatementNode* n = in;
     node* valueNode = node_firstChild(n);
     int value = evaluate(valueNode);
     printf("COUT: %d\n", value);
@@ -487,7 +472,7 @@ typedef struct {
 typedef node binaryOperatorNode;
     static int binaryOperatorNode_format(node* n, linePrinter* printer) {
         binaryOperatorNode_vtable* table = (binaryOperatorNode_vtable*) n->vtable;
-        linePrinter_stream(printer, "%s > (", table->node.name);
+        linePrinter_stream(printer, "%s -> (", table->node.name);
         node* lhs = node_firstChild((node*) n);
         node* rhs = node_nextSibling((node*) lhs);
         if (lhs != NULL) lhs->vtable->format(lhs, printer);
