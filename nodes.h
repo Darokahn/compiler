@@ -2,6 +2,7 @@
 
 #include "symbols.h"
 #include "utils.h"
+#include "instructions.h"
 
 #include <stdalign.h>
 #include <stddef.h>
@@ -21,13 +22,12 @@ typedef void* erased;
 
 typedef max_align_t align;
 
-typedef struct node node;
-
 typedef struct {
     char* name;
     int size;
     int (*format)(node*, linePrinter*);
     int (*evaluate)(void*);
+    void (*expand)(node* in, struct funcGen_t* out);
 } node_vtable;
 
 typedef enum relationshipFlags : uint8_t {
@@ -53,9 +53,14 @@ struct node {
         int16_t predecessor; // active if (eldest & flags) && (orphan & flags)
     };
 };
-static int evaluate(node* in) {
-    in->vtable->evaluate(in);
-}
+    static int evaluate(node* in) {
+        if (in->vtable->evaluate) return in->vtable->evaluate(in);
+        return 0;
+    }
+
+    static void expand(node* in, struct funcGen_t* out) {
+        if (in->vtable->expand) in->vtable->expand(in, out);
+    }
 
     static node* node_from(node* n, int16_t offset) {
         return (node*) ((uint8_t*) n + (offset * indexScale));
@@ -110,6 +115,14 @@ static int evaluate(node* in) {
         }
     }
 
+    static void node_expand(node* n, struct funcGen_t* f) {
+        node* child = node_firstChild(n);
+        while (child != NULL) {
+            expand(child, f);
+            child = node_nextSibling(child);
+        }
+    }
+
     static int node_print(node* n, void* od, aprintf of) {
         linePrinter printer;
         linePrinter_init(&printer, "\n", "  ", od, of);
@@ -120,6 +133,8 @@ static int evaluate(node* in) {
         .name="node",
         .size=sizeof(node),
         .format=node_format,
+        .evaluate=node_evaluate,
+        .expand=node_expand,
     };
     static node* node_init(node* n, node_vtable* vtable, bool repoint) {
         n->vtable = vtable;
@@ -234,12 +249,26 @@ typedef struct {
             free(b->base);
         }
     }
-#define VTABLEDEFAULTS(nodename) .name=#nodename .size=sizeof(node), .format=node_format, .evaluate=node_evaluate
 
-#define init(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(node), .format=node_format, .evaluate=node_evaluate}; nodename* nodename##_init(nodename* n) {return node_init((node*) n, &nodename##_vtable, true); return n;}
+#define init(nodename, formatfunc) node_vtable nodename##_vtable = {.name=#nodename, .size=sizeof(node), .format=node_format, .evaluate=node_evaluate, .expand=node_expand}; nodename* nodename##_init(nodename* n) {return node_init((node*) n, &nodename##_vtable, true); return n;}
 
 typedef node startNode;
-init(startNode, node_format);
+int startNode_eval(void* v) {
+    startNode* n = v;
+    node* entryPoint = node_firstChild(n);
+    return evaluate(entryPoint);
+}
+node_vtable startNode_vtable = {
+    .name="startNode",
+    .size = sizeof(startNode),
+    .format=node_format,
+    .evaluate=startNode_eval,
+    .expand=node_expand,
+};
+startNode* startNode_init(startNode* n) {
+    node_init(n, &startNode_vtable, true);
+    return n;
+}
 
 typedef node programNode;
 init(programNode, node_format);
@@ -261,18 +290,26 @@ typedef struct identifierNode {
     int lexemeLen;
 } identifierNode;
 
+    static int identifierNode_getIndex(identifierNode* n) {
+        return n->symbolIndex;
+    }
+
     static int identifierNode_eval(void* nptr) {
         identifierNode* n = (identifierNode*) nptr;
         symbol_t* sym = symbols_index(n->symbols, n->symbolIndex);
         return sym->v.value;
     }
 
+    static void identifierNode_expand(node* in, funcGen_t* out) {
+        identifierNode* var = (identifierNode*) in;
+        int index = identifierNode_getIndex(var) + 1;
+        index *= -8;
+        funcGen_memToStack(out, index);
+    }
+
     static int identifierNode_format(node* node, linePrinter* printer) {
         identifierNode* n = (identifierNode*) node;
         return linePrinter_stream(printer, "%.*s (%d)", n->lexemeLen, n->lexeme, identifierNode_eval(n));
-        /*
-        return node_format(node, printer);
-        */
     }
 
     node_vtable identifierNode_vtable = {
@@ -280,16 +317,12 @@ typedef struct identifierNode {
         .size=sizeof(identifierNode),
         .format=identifierNode_format,
         .evaluate = identifierNode_eval,
+        .expand = identifierNode_expand,
     };
 
     static void identifierNode_assign(identifierNode* n, int val) {
         symbol_t* sym = symbols_index(n->symbols, n->symbolIndex);
         sym->v.value = val;
-    }
-
-    static int identifierNode_getIndex(identifierNode* n) {
-        (void) n;
-        return 0;
     }
 
     static void identifierNode_declare(identifierNode* n) {
@@ -323,11 +356,22 @@ typedef node assignmentOperatorNode;
         identifierNode_assign(var, value);
         return value;
     }
+    void assignmentOperatorNode_expand(node* in, funcGen_t* out) {
+        assignmentOperatorNode* n = in;
+        identifierNode* var = (identifierNode*) node_firstChild(n);
+        node* valueNode = node_nextSibling((node*)var);
+        expand(valueNode, out);
+        int index = identifierNode_getIndex(var) + 1;
+        index *= -8;
+        funcGen_stackToMem(out, index);
+        funcGen_memToStack(out, index);
+    }
     node_vtable assignmentOperatorNode_vtable = {
         .name="assignment",
         .size=sizeof(assignmentOperatorNode),
         .format=node_format,
         .evaluate=assignmentOperatorNode_eval,
+        .expand=assignmentOperatorNode_expand,
     };
     assignmentOperatorNode* assignmentOperatorNode_init(assignmentOperatorNode* n) {
         return node_init(n, &assignmentOperatorNode_vtable, true);
@@ -342,11 +386,23 @@ int declarationStatementNode_eval(void* in) {
     if (value) identifierNode_assign(var, evaluate(value));
     return 0;
 }
+void declarationStatementNode_expand(node* in, funcGen_t* out) {
+    declarationStatementNode* n = in;
+    identifierNode* var = (identifierNode*) node_firstChild(n);
+    identifierNode_declare(var);
+    node* valueNode = node_nextSibling((node*)var);
+    if (!valueNode) return;
+    expand(valueNode, out);
+    int index = identifierNode_getIndex(var) + 1;
+    index *= -8;
+    funcGen_stackToMem(out, index);
+}
 node_vtable declarationStatementNode_vtable = {
     .name="declarationStatementNode",
     .size=sizeof(declarationStatementNode),
     .format=node_format,
     .evaluate=declarationStatementNode_eval,
+    .expand=declarationStatementNode_expand,
 };
 declarationStatementNode* declarationStatementNode_init(declarationStatementNode* n) {
     return node_init(n, &declarationStatementNode_vtable, true);
@@ -359,20 +415,26 @@ int coutStatementNode_eval(void* in) {
     int value = evaluate(valueNode);
     printf("COUT: %d\n", value);
     return 0;
-    return 0;
+}
+void coutStatementNode_expand(node* in, funcGen_t* out) {
+    coutStatementNode* n = in;
+    node* valueNode = node_firstChild(n);
+    expand(valueNode, out);
+    funcGen_loadInstruction(out, "printInt");
 }
 node_vtable coutStatementNode_vtable = {
     .name="coutStatementNode",
     .size=sizeof(coutStatementNode),
     .format=node_format,
     .evaluate=coutStatementNode_eval,
+    .expand=coutStatementNode_expand,
 };
 coutStatementNode* coutStatementNode_init(coutStatementNode* n) {
     return node_init(n, &coutStatementNode_vtable, true);
 }
 
 typedef node ifStatementNode;
-int ifStatementNode_eval(void* in) {
+static int ifStatementNode_eval(void* in) {
     ifStatementNode* n = (ifStatementNode*) in;
     node* condition = node_firstChild(n);
     int result = evaluate(condition);
@@ -386,13 +448,35 @@ int ifStatementNode_eval(void* in) {
     }
     return 0;
 }
+void ifStatementNode_expand(node* in, funcGen_t* out) {
+    funcGen_if(out, in);
+}
+void ifStatementNode_expandCondition(node* in, struct funcGen_t* out) {
+    ifStatementNode* n = (ifStatementNode*) in;
+    node* condition = node_firstChild(n);
+    expand(condition, out);
+}
+void ifStatementNode_expandThen(node* in, funcGen_t* out) {
+    ifStatementNode* n = (ifStatementNode*) in;
+    node* condition = node_firstChild(in);
+    node* body = node_nextSibling(condition);
+    expand(body, out);
+}
+void ifStatementNode_expandElse(node* in, funcGen_t* out) {
+    ifStatementNode* n = (ifStatementNode*) in;
+    node* condition = node_firstChild(in);
+    node* body = node_nextSibling(condition);
+    node* elseBlock = node_nextSibling(body);
+    if (elseBlock) expand(elseBlock, out);
+}
 node_vtable ifStatementNode_vtable = {
     .name="ifStatementNode",
     .size=sizeof(ifStatementNode),
     .format=node_format,
     .evaluate=ifStatementNode_eval,
+    .expand=ifStatementNode_expand,
 };
-ifStatementNode* ifStatementNode_init(ifStatementNode* n) {
+static ifStatementNode* ifStatementNode_init(ifStatementNode* n) {
     return node_init(n, &ifStatementNode_vtable, true);
 }
 
@@ -406,11 +490,26 @@ int whileStatementNode_eval(void* in) {
     }
     return 0;
 }
+void whileStatementNode_expand(node* in, funcGen_t* out) {
+    funcGen_while(out, in);
+}
+void whileStatementNode_expandCondition(node* in, funcGen_t* out) {
+    whileStatementNode* n = (whileStatementNode*) in;
+    node* condition = node_firstChild(n);
+    expand(condition, out);
+}
+void whileStatementNode_expandBody(node* in, funcGen_t* out) {
+    whileStatementNode* n = (whileStatementNode*) in;
+    node* condition = node_firstChild(n);
+    node* body = node_nextSibling(condition);
+    expand(body, out);
+}
 node_vtable whileStatementNode_vtable = {
     .name="whileStatementNode",
     .size=sizeof(whileStatementNode),
     .format=node_format,
     .evaluate=whileStatementNode_eval,
+    .expand=whileStatementNode_expand,
 };
 whileStatementNode* whileStatementNode_init(whileStatementNode* n) {
     return node_init(n, &whileStatementNode_vtable, true);
@@ -451,11 +550,17 @@ typedef struct {
         return n->value;
     }
 
+    static void integerNode_expand(node* in, funcGen_t* out) {
+        integerNode* n = (void*) in;
+        funcGen_pushConst(out, integerNode_eval(in));
+    }
+
     node_vtable integerNode_vtable = {
         .name="integerNode",
         .size=sizeof(integerNode),
         .format=integerNode_format,
         .evaluate = integerNode_eval,
+        .expand=integerNode_expand,
     };
 
     static integerNode* integerNode_init(integerNode* n, int inner) {
@@ -490,6 +595,16 @@ typedef node binaryOperatorNode;
         node* rhs = node_nextSibling((node*) lhs);
         return table->operator(evaluate(lhs), evaluate(rhs));
     }
+    
+    static void binaryOperatorNode_expand(node* in, funcGen_t* out) {
+        binaryOperatorNode* n = (binaryOperatorNode*) in;
+        binaryOperatorNode_vtable* table = (binaryOperatorNode_vtable*) n->vtable;
+        node* lhs = node_firstChild((node*) n);
+        node* rhs = node_nextSibling((node*) lhs);
+        expand(lhs, out);
+        expand(rhs, out);
+        funcGen_loadInstruction(out, table->node.name);
+    }
 
     static binaryOperatorNode* binaryOperatorNode_init(binaryOperatorNode* n, binaryOperatorNode_vtable* vtable) {
         vtable->node.evaluate = binaryOperatorNode_eval;
@@ -499,7 +614,7 @@ typedef node binaryOperatorNode;
 #define DEFINE_BINARY_OP(opname, op) \
 typedef binaryOperatorNode opname##OperatorNode; \
 static int opname##OperatorNode_op(int x, int y) { return x op y; } \
-binaryOperatorNode_vtable opname##OperatorNode_vtable = {.node={.name=#opname,.size=sizeof(opname##OperatorNode),.format=binaryOperatorNode_format}, .operator=opname##OperatorNode_op}; \
+binaryOperatorNode_vtable opname##OperatorNode_vtable = {.node={.name=#opname,.size=sizeof(opname##OperatorNode),.format=binaryOperatorNode_format, .evaluate=binaryOperatorNode_eval, .expand=binaryOperatorNode_expand}, .operator=opname##OperatorNode_op}; \
 static opname##OperatorNode* opname##OperatorNode_init(opname##OperatorNode* n) { \
     return (opname##OperatorNode*) binaryOperatorNode_init((binaryOperatorNode*) n, &opname##OperatorNode_vtable); \
 }

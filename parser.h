@@ -8,9 +8,11 @@
 #include "nodeStreaming.h"
 #include "stringStreaming/stringstream.h"
 #include "utils.h"
+#include "instructions.h"
 
 #include <sys/param.h>
 #include <signal.h>
+#include <errno.h>
 
 // will later hold information 
 typedef struct {
@@ -626,9 +628,6 @@ static bool parser_program(parser_t* p) {
     if (success) {
         programNode* program = programNode_init(stack(programNode));
         parser_claimNodes(p, program);
-        program = (programNode*) node_from(p->nodes.base, p->nodeCursor);
-        node_print(program, erase stdout, erase fprintf);
-        node_evaluate(program);
     }
     else parser_deNestNodes(p);
     return success;
@@ -643,5 +642,20 @@ static bool parser_start(parser_t* p) {
     return success;
 }
 
-static bool parser_exec(parser_t* p) {
+static void parser_interpret(parser_t* p) {
+    node* start = node_from(p->nodes.base, p->nodeCursor);
+    evaluate(start);
+}
+
+static void parser_execute(parser_t* p) {
+    uint8_t* execMem = mmap(NULL, 4096 * 8, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    printf("execMem: %p\n", execMem);
+    printf("err: %s\n", strerror(errno));
+    funcGen_t* funcGen = funcGen_init(stack(funcGen_t), execMem, 4096 * 8, false);
+    node* start = node_from(p->nodes.base, p->nodeCursor);
+    node_expand(start, funcGen);
+    int (*function)() = funcGen_finish(funcGen);
+    int x = function();
+    printf("result: %d\n", x);
+    munmap(execMem, 4096 * 8);
 }

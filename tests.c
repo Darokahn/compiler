@@ -374,6 +374,8 @@ char* test_12(void* od, aprintf of) {
     parser_init(&parser, "testfiles/test1.c");
     of(od, "Parsing testfiles/test1.c...\n");
     bool success = parser_start(&parser);
+    parser_interpret(&parser);
+    parser_execute(&parser);
     if (!success) {
         msg = error("Parse failed: parser_start returned failure for testfiles/test1.c\n");
         goto cleanup;
@@ -406,6 +408,8 @@ char* test_14(void* od, aprintf of) {
     parser_init(&parser, "testfiles/test3.c");
     of(od, "Parsing testfiles/test3.c...\n");
     bool success = parser_start(&parser);
+    parser_interpret(&parser);
+    parser_execute(&parser);
     if (!success) {
         msg = error("Parse failed: parser_start returned failure for testfiles/test3.c\n");
         goto cleanup;
