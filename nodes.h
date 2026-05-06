@@ -30,7 +30,7 @@ typedef struct {
     void (*expand)(node* in, struct funcGen_t* out);
 } node_vtable;
 
-typedef enum relationshipFlags : uint8_t {
+typedef enum relationshipFlags {
     eldest=1,
     orphan=1<<1,
     dangling=1<<2,
@@ -42,7 +42,7 @@ struct node {
     node_vtable* vtable; // could later become an index (though pointer is likely the right tradeoff here. Index needs to answer "index into what?" using either global state or context that the node becomes useless without.)
     int16_t lastChild;
     // a node's size is inside its vtable. If a node cannot have siblings and does not care about its parent, it can refrain from allocating enough size for these members.
-    relationshipFlags flags;
+    uint16_t flags;
     union {
         int16_t nextSibling; // active if (flags & !dangling)
         uint16_t predecessorRepeat; // inverse of above
@@ -433,6 +433,26 @@ coutStatementNode* coutStatementNode_init(coutStatementNode* n) {
     return node_init(n, &coutStatementNode_vtable, true);
 }
 
+typedef node returnStatementNode;
+int returnStatementNode_eval(void* in) {
+    return 0;
+}
+void returnStatementNode_expand(node* in, funcGen_t* out) {
+    returnStatementNode* n = in;
+    node* valueNode = node_firstChild(n);
+    expand(valueNode, out);
+    funcGen_pop(out, rax);
+}
+node_vtable returnStatementNode_vtable = {
+    .name="returnStatementNode",
+    .size=sizeof(returnStatementNode),
+    .format=node_format,
+    .evaluate=returnStatementNode_eval,
+    .expand=returnStatementNode_expand,
+};
+returnStatementNode* returnStatementNode_init(returnStatementNode* n) {
+    return node_init(n, &returnStatementNode_vtable, true);
+}
 typedef node ifStatementNode;
 static int ifStatementNode_eval(void* in) {
     ifStatementNode* n = (ifStatementNode*) in;

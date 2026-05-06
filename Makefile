@@ -9,7 +9,7 @@ defs:
 flow:
 	python3 dfa_gen/flowGenerator.py dfa_gen/stateMachine
 
-cWarn: main.c
+cWarn: defs main.c
 	gcc -rdynamic $(TARGETS) -g -fsanitize=address -Wall -Wextra -Wno-unused-function -pedantic -std=c11
 
 c: defs main.c

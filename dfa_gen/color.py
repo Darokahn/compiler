@@ -1,7 +1,35 @@
-from matplotlib.colors import to_rgba
+import re
 
 def to_rgb(string):
-    return tuple(map(lambda x: x * 255, to_rgba(string)[0:-1]))
+    if isinstance(string, tuple):
+        return string
+    string = string.strip().lower()
+    
+    # Hex colors: #rgb, #rrggbb
+    hex_match = re.match(r'^#([0-9a-f]{3}|[0-9a-f]{6})$', string)
+    if hex_match:
+        h = hex_match.group(1)
+        if len(h) == 3:
+            h = ''.join(c * 2 for c in h)
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+    
+    # rgb()/rgba()
+    rgb_match = re.match(r'^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)', string)
+    if rgb_match:
+        return tuple(int(x) for x in rgb_match.groups())
+    
+    # Named colors (subset — extend as needed)
+    named = {
+        'red': (255, 0, 0), 'green': (0, 128, 0), 'blue': (0, 0, 255),
+        'white': (255, 255, 255), 'black': (0, 0, 0), 'yellow': (255, 255, 0),
+        'cyan': (0, 255, 255), 'magenta': (255, 0, 255), 'orange': (255, 165, 0),
+        'purple': (128, 0, 128), 'pink': (255, 192, 203), 'gray': (128, 128, 128),
+        'grey': (128, 128, 128), 'lime': (0, 255, 0), 'brown': (165, 42, 42),
+    }
+    if string in named:
+        return named[string]
+    
+    raise ValueError(f"Unrecognized color format: {string!r}")
 
 
 colors = {
