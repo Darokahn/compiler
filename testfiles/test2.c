@@ -1,3 +1,3 @@
-int main() {
+struct main {
     test(1 + 1);
 }

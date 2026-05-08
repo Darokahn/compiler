@@ -66,12 +66,6 @@ void initSymbols(symbols_t* t) {
         };
         symbols_add(t, keywordStrings[i], strlen(keywordStrings[i]), sym);
     }
-    for (int i = 0; i < LASTTYPE; i++) {
-        symbol_t sym = {
-            .type = type_symbol
-        };
-        symbols_add(t, builtinTypeStrings[i], strlen(builtinTypeStrings[i]), sym);
-    }
 }
 
 char* test_0(void* od, aprintf of) {

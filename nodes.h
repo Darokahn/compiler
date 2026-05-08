@@ -413,7 +413,7 @@ int coutStatementNode_eval(void* in) {
     coutStatementNode* n = in;
     node* valueNode = node_firstChild(n);
     int value = evaluate(valueNode);
-    printf("COUT: %d\n", value);
+    printf("%d ", value);
     return 0;
 }
 void coutStatementNode_expand(node* in, funcGen_t* out) {
@@ -441,7 +441,7 @@ void returnStatementNode_expand(node* in, funcGen_t* out) {
     returnStatementNode* n = in;
     node* valueNode = node_firstChild(n);
     expand(valueNode, out);
-    funcGen_pop(out, rax);
+    funcGen_pop(out, REGISTER_OP1);
 }
 node_vtable returnStatementNode_vtable = {
     .name="returnStatementNode",
@@ -487,7 +487,9 @@ void ifStatementNode_expandElse(node* in, funcGen_t* out) {
     node* condition = node_firstChild(in);
     node* body = node_nextSibling(condition);
     node* elseBlock = node_nextSibling(body);
-    if (elseBlock) expand(elseBlock, out);
+    if (elseBlock) {
+        expand(elseBlock, out);
+    }
 }
 node_vtable ifStatementNode_vtable = {
     .name="ifStatementNode",
@@ -544,14 +546,43 @@ int forStatementNode_eval(void* in) {
     for (evaluate(initStatement); evaluate(testExpression); evaluate(incrementStatement)) {
         evaluate(body);
     }
-
     return 0;
+}
+void forStatementNode_expand(node* in, funcGen_t* out) {
+    funcGen_for(out, in);
+}
+void forStatementNode_expandInit(node* in, funcGen_t* out) {
+    forStatementNode* n = (forStatementNode*) in;
+    node* initStatement = node_firstChild(n);
+    expand(initStatement, out);
+}
+void forStatementNode_expandCondition(node* in, funcGen_t* out) {
+    forStatementNode* n = (forStatementNode*) in;
+    node* initStatement = node_firstChild(n);
+    node* condition = node_nextSibling(initStatement);
+    expand(condition, out);
+}
+void forStatementNode_expandBody(node* in, funcGen_t* out) {
+    forStatementNode* n = (forStatementNode*) in;
+    node* initStatement = node_firstChild(n);
+    node* condition = node_nextSibling(initStatement);
+    node* incrementStatement = node_nextSibling(condition);
+    node* body = node_nextSibling(incrementStatement);
+    expand(body, out);
+}
+void forStatementNode_expandIter(node* in, funcGen_t* out) {
+    forStatementNode* n = (forStatementNode*) in;
+    node* initStatement = node_firstChild(n);
+    node* condition = node_nextSibling(initStatement);
+    node* incrementStatement = node_nextSibling(condition);
+    expand(incrementStatement, out);
 }
 node_vtable forStatementNode_vtable = {
     .name="forStatementNode",
     .size=sizeof(forStatementNode),
     .format=node_format,
     .evaluate=forStatementNode_eval,
+    .expand=forStatementNode_expand,
 };
 forStatementNode* forStatementNode_init(forStatementNode* n) {
     return node_init(n, &forStatementNode_vtable, true);

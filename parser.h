@@ -500,6 +500,21 @@ static bool parser_coutStatement(parser_t* p) {
     return success;
 }
 
+static bool parser_returnStatement(parser_t* p) {
+    parser_nestNodes(p);
+    bool success =
+        parser_matchIdentifier(p, "return", sizeof "cout" - 1) &&
+        parser_expression(p) &&
+        parser_boolMatch(p, semicolon_token)
+    ;
+    if (success) {
+        returnStatementNode* n = returnStatementNode_init(stack(returnStatementNode));
+        parser_claimNodes(p, n);
+    }
+    else parser_deNestNodes(p);
+    return success;
+}
+
 static bool parser_statement(parser_t* p);
 static bool parser_ifStatement(parser_t* p) {
     parser_nestNodes(p);
@@ -579,6 +594,7 @@ static bool parser_statement(parser_t* p) {
         parser_whileStatement(p) ||
         parser_forStatement(p) ||
         parser_coutStatement(p) ||
+        parser_returnStatement(p) ||
         parser_declarationStatement(p) ||
         parser_block(p) ||
         parser_expression(p) && parser_boolMatch(p, semicolon_token);
@@ -619,10 +635,8 @@ static bool parser_block(parser_t* p) {
 static bool parser_program(parser_t* p) {
     parser_nestNodes(p);
     bool success =
-        parser_matchIdentifier(p, "int", sizeof "int" - 1) &&
+        parser_matchIdentifier(p, "struct", sizeof "struct" - 1) &&
         parser_matchIdentifier(p, "main", sizeof "main" - 1) &&
-        parser_boolMatch(p, lparen_token) &&
-        parser_boolMatch(p, rparen_token) &&
         parser_block(p)
     ;
     if (success) {
@@ -649,8 +663,6 @@ static void parser_interpret(parser_t* p) {
 
 static void parser_execute(parser_t* p) {
     uint8_t* execMem = mmap(NULL, 4096 * 8, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    printf("execMem: %p\n", execMem);
-    printf("err: %s\n", strerror(errno));
     funcGen_t* funcGen = funcGen_init(stack(funcGen_t), execMem, 4096 * 8, false);
     node* start = node_from(p->nodes.base, p->nodeCursor);
     node_expand(start, funcGen);

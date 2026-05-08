@@ -49,6 +49,7 @@ static char* keywordStrings[] = {
     "while"
 };
 
+/*
 enum builtinTypes {
     CHAR,
     VOID,
@@ -77,3 +78,4 @@ static char* builtinTypeStrings[] = {
     "float",
     "extern",
 };
+*/

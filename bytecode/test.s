@@ -2,5 +2,5 @@
 .section .text
 
 main:
-    push $0
+    push $31
     jmp op_printInt
